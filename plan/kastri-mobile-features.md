@@ -205,8 +205,8 @@ request/completion bridge without introducing a third-party SDK.
   handler, user cancellation, and MIME propagation.
 - [x] Portable contract test: `tests/test_share_items.pas` — 7 assertions pass.
 - [x] iOS Pascal archive and Objective-C bridge syntax check.
-- [ ] Android native build/device smoke test — blocked by missing
-  `aarch64-linux-android-as` and Android SDK in this host.
+- [ ] Android APK/device smoke test — native `libtina4.so` now builds; APK
+  packaging is pending a locally cached ZXing JAR or Maven network access.
 - Location: permission denied, provider disabled, one-shot success, update
   delivery, stop/cancel, malformed/native error callback, and process/lifecycle
   teardown.
@@ -221,8 +221,11 @@ request/completion bridge without introducing a third-party SDK.
   `Features/ShareItems` sources were located in the sibling checkout
   `/Users/Shared/Projects/Kastri`; they are used as the reference, not copied
   wholesale into the Free Pascal tree.
-- [ ] Android verification environment lacks `aarch64-linux-android-as` and an
-  Android SDK (`android.jar`/build tools); Java/device verification is pending.
+- [x] Android assembler wrapper was present but missing from the build script's
+  `PATH`; `android/build.sh` now discovers the standard FPC cross-bin directory
+  and successfully builds `libtina4.so` with the supplied SDK/NDK.
+- [ ] Android APK packaging/device verification still needs the ignored
+  `zxing-core-3.5.3.jar`; this host cannot resolve Maven to download it.
 - [ ] Existing unrelated suite failures remain in `test_crypto`, `test_authflow`,
   `test_secrets`, and `test_ssoflow`; `test_share_items` is green.
 

@@ -34,7 +34,7 @@ Android Studio).
 |---|---|---|
 | FPC arm64 cross | `~/fpc` (ppca64 + aarch64-android RTL) | `toolchain/build-crosses.sh` |
 | FPC **arm (32-bit)** cross | `~/fpc` (ppcrossarm + arm-android RTL) | see below |
-| Android NDK r29 | `/opt/homebrew/share/android-ndk` | `brew install --cask android-ndk` |
+| Android NDK r29 | `$ANDROID_SDK/ndk/29.0.13113456` | Set `ANDROID_SDK` or use the default `$HOME/Library/Android/sdk` |
 | SDK build-tools + platform | `/opt/homebrew/share/android-commandlinetools` | `brew install --cask android-commandlinetools` + `sdkmanager` |
 | adb | on PATH | platform-tools |
 
