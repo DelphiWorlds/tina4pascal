@@ -300,20 +300,39 @@ sign_windows_exe() {
   if [ -n "$p11mod" ]; then
     # ---- PKCS#11 (SimplySign / token) -------------------------------------
     [ -f "$p11mod" ] || die "PKCS#11 module not found: $p11mod"
+    certuri="${TINA4_WIN_PKCS11_CERT:-pkcs11:type=cert}"
+    keyuri="${TINA4_WIN_PKCS11_KEY:-pkcs11:type=private}"
+    # Bridge from OpenSSL to the PKCS#11 module. Modern libp11 + OpenSSL 3/4 ship
+    # the pkcs11 PROVIDER (ossl-modules/pkcs11prov) rather than the legacy ENGINE
+    # (engines-*/pkcs11) — OpenSSL ≥4 drops the ENGINE API entirely. Prefer the
+    # provider (osslsigncode -provider), fall back to the engine on older stacks.
+    prov="${TINA4_WIN_PKCS11_PROVIDER:-}"
+    if [ -z "$prov" ]; then
+      for c in /opt/homebrew/lib/ossl-modules/pkcs11prov.dylib \
+               /usr/local/lib/ossl-modules/pkcs11prov.dylib; do
+        [ -f "$c" ] && prov="$c" && break
+      done
+    fi
     eng="${TINA4_WIN_PKCS11_ENGINE:-}"
-    if [ -z "$eng" ]; then
+    if [ -z "$prov" ] && [ -z "$eng" ]; then
       for c in /opt/homebrew/lib/engines-3/pkcs11.dylib /usr/local/lib/engines-3/pkcs11.dylib \
                /opt/homebrew/lib/engines-1.1/pkcs11.dylib; do
         [ -f "$c" ] && eng="$c" && break
       done
     fi
-    [ -n "$eng" ] || die "pkcs11 engine not found — brew install libp11, or set TINA4_WIN_PKCS11_ENGINE"
-    certuri="${TINA4_WIN_PKCS11_CERT:-pkcs11:type=cert}"
-    keyuri="${TINA4_WIN_PKCS11_KEY:-pkcs11:type=private}"
-    say "${D}osslsigncode sign — PKCS#11 token (sha256, RFC3161 $ts)${Z}"
-    if osslsigncode sign -pkcs11engine "$eng" -pkcs11module "$p11mod" \
-         -pkcs11cert "$certuri" -key "$keyuri" \
-         -h sha256 -n "$nm" -i "$url" -ts "$ts" -in "$exe" -out "$tmp"; then
+    [ -n "$prov" ] || [ -n "$eng" ] || die "no pkcs11 provider/engine — brew install libp11, or set TINA4_WIN_PKCS11_PROVIDER"
+    if [ -n "$prov" ]; then
+      say "${D}osslsigncode sign — PKCS#11 provider (sha256, RFC3161 $ts)${Z}"
+      osslsigncode sign -provider "$prov" -pkcs11module "$p11mod" \
+        -pkcs11cert "$certuri" -key "$keyuri" \
+        -h sha256 -n "$nm" -i "$url" -ts "$ts" -in "$exe" -out "$tmp"
+    else
+      say "${D}osslsigncode sign — PKCS#11 engine (sha256, RFC3161 $ts)${Z}"
+      osslsigncode sign -pkcs11engine "$eng" -pkcs11module "$p11mod" \
+        -pkcs11cert "$certuri" -key "$keyuri" \
+        -h sha256 -n "$nm" -i "$url" -ts "$ts" -in "$exe" -out "$tmp"
+    fi
+    if [ $? -eq 0 ] && [ -f "$tmp" ]; then
       mv -f "$tmp" "$exe"
     else
       rm -f "$tmp"
