@@ -10,6 +10,30 @@ MACSDK=$(xcrun --show-sdk-path)
 IOSSDK=$(xcrun --sdk iphoneos --show-sdk-path)
 CROSS=$PREFIX/cross
 
+# CPU → FPC compiler-binary suffix (ppc<suffix> / ppcross<suffix>)
+cpusuffix() {
+  case "$1" in
+    x86_64) echo x64 ;; aarch64) echo a64 ;; arm) echo arm ;;
+    i386) echo 386 ;; *) echo "$1" ;;
+  esac
+}
+
+# crossinstall installs the cross compiler as ppcross<suffix>, but the `fpc`
+# driver invokes ppc<suffix> and searches its own bin dir (where native compilers
+# are symlinked). Without this link a cross build fails with "ppc<suffix> can't be
+# executed, error code: 127". One cross compiler serves every OS of its CPU, so a
+# link per CPU is enough — and never clobber the host's native ppc<suffix>.
+link_cross() {
+  sfx=$(cpusuffix "$1")
+  libdir=$(dirname "$PP")                 # …/lib/fpc/<ver>
+  xbin="$libdir/ppcross$sfx"
+  lnk="$PREFIX/bin/ppc$sfx"
+  if [ -f "$xbin" ] && [ ! -e "$lnk" ]; then
+    ln -sf "../lib/fpc/$(basename "$libdir")/ppcross$sfx" "$lnk"
+    echo "     linked $(basename "$lnk") -> ppcross$sfx"
+  fi
+}
+
 build() {
   name=$1; os=$2; cpu=$3; bindir=$4; binprefix=$5; crossopt=$6
   log=/private/tmp/fpc-cross-$name.log
@@ -20,6 +44,7 @@ build() {
       ${bindir:+CROSSBINDIR=$bindir} ${binprefix:+BINUTILSPREFIX=$binprefix} \
       ${crossopt:+CROSSOPT="$crossopt"} > "$log" 2>&1; then
     echo "OK   $name"
+    link_cross "$cpu"
   else
     echo "FAIL $name (see $log)"
   fi
