@@ -586,6 +586,12 @@ proj_android_build() {
   mkdir -p "$host"; cp -R "$ROOT/android/." "$host/"
   APPDIR="$host/app/src/main"
   rm -rf "$host/out" "$host"/*.apk "$host"/*.idsig "$APPDIR/jniLibs" 2>/dev/null || true
+  # Each packaged project owns its share provider authority. The reference host
+  # keeps the default value; project APKs must not collide with one another or
+  # with the reference app already installed on a test device.
+  sed -i.bak "s/com\.tina4\.pascal\.tina4share/${bundle}.tina4share/g" \
+    "$APPDIR/AndroidManifest.xml"
+  rm -f "$APPDIR/AndroidManifest.xml.bak"
   mkdir -p "$APPDIR/assets"; cp "$work/index.html" "$APPDIR/assets/showcase.html"
   # bundle the project's assets (icon, images) into the APK; local-asset <img>
   # resolution on Android is a follow-up (see docs/TOOLING-DISTRIBUTION.md).

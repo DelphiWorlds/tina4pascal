@@ -36,6 +36,8 @@ android/libs/
 
 # tina4pascal CLI build outputs
 /build/
+.tina4/
+examples/*/build/
 # local FPC build/output dirs used when compiling examples/tests
 _b/
 _rel/

@@ -205,8 +205,9 @@ request/completion bridge without introducing a third-party SDK.
   handler, user cancellation, and MIME propagation.
 - [x] Portable contract test: `tests/test_share_items.pas` — 7 assertions pass.
 - [x] iOS Pascal archive and Objective-C bridge syntax check.
-- [ ] Android APK/device smoke test — native `libtina4.so` now builds; APK
-  packaging is pending a locally cached ZXing JAR or Maven network access.
+- [x] Android APK/device smoke test — the ShareItems demo APK packages,
+  installs beside the reference app, opens Android's native chooser, and
+  stages file payloads through the private provider.
 - Location: permission denied, provider disabled, one-shot success, update
   delivery, stop/cancel, malformed/native error callback, and process/lifecycle
   teardown.
@@ -224,16 +225,19 @@ request/completion bridge without introducing a third-party SDK.
 - [x] Android assembler wrapper was present but missing from the build script's
   `PATH`; `android/build.sh` now discovers the standard FPC cross-bin directory
   and successfully builds `libtina4.so` with the supplied SDK/NDK.
-- [ ] Android APK packaging/device verification still needs the ignored
-  `zxing-core-3.5.3.jar`; this host cannot resolve Maven to download it.
+- [x] Android APK packaging/device verification uses the supplied ignored
+  `android/libs/zxing-core-3.5.3.jar`; the project build cache is local-only.
+- [x] Project APK provider authority is bundle-specific, so multiple Tina4
+  apps can be installed on the same Android device without provider collisions.
 - [ ] Existing unrelated suite failures remain in `test_crypto`, `test_authflow`,
   `test_secrets`, and `test_ssoflow`; `test_share_items` is green.
 
 ## Commits
 
 - (working tree) `feat: add capability contract and ShareItems adapters`
+- (working tree) `test: add ShareItems integration demo`
 
-## Status: ShareItems implementation complete; native device verification pending
+## Status: ShareItems implementation complete; demo and Android chooser smoke test verified
 
 ## References
 

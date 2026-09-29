@@ -88,6 +88,7 @@ public final class Tina4Share {
             byte[] buf = new byte[8192]; int n;
             while ((n = src.read(buf)) > 0) dst.write(buf, 0, n);
         }
-        return Uri.parse("content://com.tina4.pascal.tina4share/" + Uri.encode(out.getName()));
+        return Uri.parse("content://" + activity.getPackageName() + ".tina4share/" +
+                Uri.encode(out.getName()));
     }
 }
