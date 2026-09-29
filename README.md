@@ -1,8 +1,6 @@
 <p align="center">
-  <img src="branding/icon.png" alt="Tina4Pascal" width="128" height="128">
+  <img src="examples/showcase/assets/tina4pascal-logo.png" alt="Tina4Pascal — It’s magic: templates, components, cross platform, open source" width="760">
 </p>
-
-<h1 align="center">Tina4Pascal</h1>
 
 <p align="center">
   <strong>HTML-driven native apps in Free Pascal — one codebase, six targets,
