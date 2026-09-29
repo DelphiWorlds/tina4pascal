@@ -1,4 +1,5 @@
 # build artifacts
+.DS_Store
 *.o
 *.ppu
 *.rsj

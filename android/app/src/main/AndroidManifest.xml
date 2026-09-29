@@ -26,5 +26,10 @@
         <service android:name=".Tina4PushService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+        <provider
+            android:name=".Tina4ShareProvider"
+            android:authorities="com.tina4.pascal.tina4share"
+            android:exported="false"
+            android:grantUriPermissions="true" />
     </application>
 </manifest>

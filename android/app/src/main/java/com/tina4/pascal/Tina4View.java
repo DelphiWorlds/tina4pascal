@@ -55,6 +55,7 @@ public class Tina4View extends View implements Runnable,
     private native void nativeSetFile(String name);   // picked filename → the <input type=file>
     private native void nativeSetPhoto(String path);  // captured image path → <img id="shot">
     private native void nativeSetRecording(String path); // recorded audio path → <recorder>/<audio id="rec">
+    private native void nativeShareResult(int status, String activity, String error);
     private native String nativeAudioSrc();              // src of the toggled <audio controls>
     private native int    nativeAudioWantPlay();         // 1 = the tap asked to play, 0 = pause
     private native void   nativeSetAudioProgress(float fraction, int playing); // elapsed 0..1 + sounding
@@ -83,6 +84,9 @@ public class Tina4View extends View implements Runnable,
     }
     /** Called by MainActivity when capture finishes (path, or "" on failure). */
     void onRecordingDone(String path) { nativeSetRecording(path); invalidate(); }
+    void onShareResult(int status, String activity, String error) {
+        nativeShareResult(status, activity, error); invalidate();
+    }
 
     // engine-drawn <audio controls>: one MediaPlayer for the clip the user toggled,
     // with a static-nested ticker pushing the elapsed fraction back (the engine
