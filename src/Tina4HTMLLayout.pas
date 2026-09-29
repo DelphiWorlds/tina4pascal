@@ -2632,6 +2632,7 @@ function TLayoutEngine.LayoutFlex(Parent: TLayoutBox; Tag: THTMLTag;
 var
   st, cs: TComputedStyle;
   box, cb, relaid: TLayoutBox;
+  probeBox, probeChild: TLayoutBox;
   items: TObjectList<TLayoutBox>;
   itemTags: TList<THTMLTag>;
   c: THTMLTag;
@@ -2643,6 +2644,7 @@ var
   dir, jc, ai, ia: string;
   sumMain, freeMain, curr, gap, crossOff, usedFixed, sumGrow, targetW, autoShare: Single;
   natW: Single;   // box max-content width, so a parent can shrink this to content
+  intrinsicW, probeGap: Single; // max-content width for an auto-sized nested row flex
   txt: string;    // item text for content-width measure (transform + spacing applied)
   autoCount: Integer;
   lineW, lineH, lineFree, lx, lgap, lineY, totalH, flexGap: Single;
@@ -2808,24 +2810,55 @@ begin
           baseW[i] := 0                        // flex-grow with basis:auto → 0 base
         else
         begin                                   // content width (single line)
-          sb := TStringBuilder.Create;
-          try
-            CollectInlineText(itemTags[i], sb);
-            txt := Trim(CollapseWS(sb.ToString));
-            // measure at the item's REAL metrics — text-transform (uppercase is
-            // wider), letter-spacing and the item's font/weight all change the
-            // width. Omitting them measured a too-narrow item, so the rendered
-            // text (e.g. an uppercase, letter-spaced pill) wrapped/clipped inside.
-            if (cs.TextTransform <> '') and not SameText(cs.TextTransform, 'none') then
-              txt := ApplyTextTransform(txt, cs.TextTransform);
-            FCanvas.FontFamily := cs.FontFamily; FCanvas.FontWeight := cs.FontWeight;
-            FCanvas.LetterSpacing := cs.LetterSpacing;
-            m := FCanvas.MeasureText(txt, cs.FontSize, FontStylesOf(cs));
-            FCanvas.FontFamily := ''; FCanvas.FontWeight := 0; FCanvas.LetterSpacing := 0;
-          finally sb.Free; end;
-          // reserve room for any explicitly-sized replaced graphic inside
-          baseW[i] := Max(m.Width, MaxReplacedW(itemTags[i])) +
-            cs.Padding.Horz + cs.BorderWidths.Horz;
+          intrinsicW := -1;
+          // A nested auto-width row flex has no inline text of its own. Passing
+          // that zero text width straight to LayoutFlex makes its available
+          // width zero, so flex-flow:row wrap puts every child on a separate
+          // line. Measure its max-content width at the parent's available width
+          // first, then the normal item-build pass lays it out at that width.
+          if ((LowerCase(cs.Display) = 'flex') or (LowerCase(cs.Display) = 'inline-flex')) and
+             ((LowerCase(cs.FlexDirection) = 'row') or
+              (LowerCase(cs.FlexDirection) = 'row-reverse')) then
+          begin
+            probeBox := MakeContainerBox(itemTags[i], st, contentW, LowerCase(cs.Display));
+            if probeBox <> nil then
+            try
+              intrinsicW := 0;
+              for probeChild in probeBox.Children do
+                intrinsicW := intrinsicW + probeChild.W;
+              if probeBox.Children.Count > 1 then
+              begin
+                probeGap := cs.ColGap;
+                if probeGap < 0 then probeGap := cs.FlexGap;
+                intrinsicW := intrinsicW + probeGap * (probeBox.Children.Count - 1);
+              end;
+            finally
+              probeBox.Free;
+            end;
+          end;
+          if intrinsicW >= 0 then
+            baseW[i] := intrinsicW + cs.Padding.Horz + cs.BorderWidths.Horz
+          else
+          begin
+            sb := TStringBuilder.Create;
+            try
+              CollectInlineText(itemTags[i], sb);
+              txt := Trim(CollapseWS(sb.ToString));
+              // measure at the item's REAL metrics — text-transform (uppercase is
+              // wider), letter-spacing and the item's font/weight all change the
+              // width. Omitting them measured a too-narrow item, so the rendered
+              // text (e.g. an uppercase, letter-spaced pill) wrapped/clipped inside.
+              if (cs.TextTransform <> '') and not SameText(cs.TextTransform, 'none') then
+                txt := ApplyTextTransform(txt, cs.TextTransform);
+              FCanvas.FontFamily := cs.FontFamily; FCanvas.FontWeight := cs.FontWeight;
+              FCanvas.LetterSpacing := cs.LetterSpacing;
+              m := FCanvas.MeasureText(txt, cs.FontSize, FontStylesOf(cs));
+              FCanvas.FontFamily := ''; FCanvas.FontWeight := 0; FCanvas.LetterSpacing := 0;
+            finally sb.Free; end;
+            // reserve room for any explicitly-sized replaced graphic inside
+            baseW[i] := Max(m.Width, MaxReplacedW(itemTags[i])) +
+              cs.Padding.Horz + cs.BorderWidths.Horz;
+          end;
         end;
         usedFixed := usedFixed + baseW[i];
         sumGrow := sumGrow + growF[i];

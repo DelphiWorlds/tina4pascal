@@ -55,7 +55,7 @@ Status: ✅ Supported · 🟡 Partial (caveat noted) · 📦 Parsed-only (in
 | flex-shrink | ✅ | weighted shrink pass on overflowing non-wrapping rows — **applies even when the item also flex-grows** (grow only adds positive free space; on overflow, shrink wins), verified 0.00% vs Chrome |
 | flex-direction | ✅ | row/column + row-reverse/column-reverse: items reverse order **and** pack from the far edge (a default `row-reverse` right-aligns, matching Chrome 0.00%) — the reverse flips `justify-content` flex-start↔flex-end. Reftest `css-flexreverse` |
 | flex-wrap | ✅ | wrap + wrap-reverse for **both** row and column directions (lines/columns stacked on the cross axis, reverse order for wrap-reverse, align-content honoured; grow disabled while wrapping). Column wrap packs down each column until the definite height is exceeded, then stacks columns across — verified matching Chrome (`flex-flow: column wrap` 0.25%). Reftest `flex-flow` |
-| flex-flow | ✅ | shorthand for `flex-direction` \|\| `flex-wrap` (either order, one or both) |
+| flex-flow | ✅ | shorthand for `flex-direction` \|\| `flex-wrap` (either order, one or both); auto-sized nested row flex items use their max-content width before wrapping. Reftests `flex-flow`, `flex-row-intrinsic` |
 | justify-content | ✅ | start/center/end/space-between/around/evenly |
 | align-items | ✅ | center/flex-end/stretch (the default, fills the cross axis); no baseline. On a **column** flex a non-stretch value (center/flex-end/start) **shrinks an auto-width item to its content** first (via the item's `NaturalW`) so it can actually be offset — otherwise a width-less flex/block child fills the container and centring has nothing to move. Reftest `flex-col-center-shrink` |
 | align-self, order | ✅ | `align-self` overrides `align-items` per item (stretch/center/start/end); `order` reorders items (stable) before layout |
@@ -124,7 +124,7 @@ Status: ✅ Supported · 🟡 Partial (caveat noted) · 📦 Parsed-only (in
 | ::first-line | ✅ | recolours / decorates the block's first formatted line: `color`, `text-decoration` (underline/line-through/overline). Applied after line breaking, so only non-metric properties — a first-line `font-size`/`font-weight` is intentionally not re-broken. Reftest `css-first-line` |
 | quotes | ✅ | custom `<q>` quotation pairs (inherited): `q{quotes:"«" "»" "‹" "›"}` picks the pair by nesting depth; `none` suppresses the marks. Default is “ ” / ‘ ’ by depth. Reftest `css-quotes-custom` |
 | counter-reset, counter-increment, counter-set | ✅ | `content: counter(name[, style])` and `counters(name, "sep"[, style])`. Document-order traversal in `InjectPseudo` keeps a nesting **stack** per counter — reset pushes a level, set overwrites the innermost, increment adds to it, the element's resets pop when its scope ends — so nested `counters(item,".")` yields 1 / 1.1 / 1.2 / 2. Styles: decimal (default), decimal-leading-zero, lower/upper-roman, lower/upper-alpha(latin). Reftests `css-counter-section`, `css-counter-nested`, `css-counter-roman`, `css-counter-set` |
-| box-shadow | ✅ | soft blur (NSShadow) + spread + corner-radius aware, outset; inset still TODO |
+| box-shadow | ✅ | soft RGBA-composited blur + spread + corner-radius aware, outset; inset still TODO. Reftests `fx-boxshadow`, `shadow-spread`, `shadow-hard`, `shadow-multi` |
 | outline (+ width/style/color/offset) | ✅ | painted: stroke outside the border box, offset by outline-offset (dashed→solid) |
 
 ## Visual effects & compositing

@@ -746,29 +746,13 @@ begin
 end;
 
 procedure TCocoaCanvas.FillSoftShadow(X, Y, W, H, Radius, Blur: Single; Color: TTina4Color);
-const OFF = 100000;   // park the solid shape far off-screen; only its blur lands in view
-var
-  sh: NSShadow;
-  path: NSBezierPath;
 begin
-  if Radius > W / 2 then Radius := W / 2;
-  if Radius > H / 2 then Radius := H / 2;
-  NSGraphicsContext.currentContext.saveGraphicsState;
-  sh := NSShadow(NSShadow.alloc.init).autorelease;
-  // CSS blur-radius ≈ 2σ; NSShadow's blurRadius runs tighter, so scale up to match a
-  // browser's Gaussian falloff (a 40px CSS blur feathers ~40px, not ~15px).
-  sh.setShadowBlurRadius(Blur * 1.6);
-  // Draw the rounded rect OFF-screen and offset its shadow back to (X,Y): this paints
-  // ONLY the blurred shadow, never the hard solid shape (which used to show as a sharp
-  // band wherever the element didn't cover it). X offset is flip-independent.
-  sh.setShadowOffset(NSMakeSize(OFF, 0));
-  sh.setShadowColor(NSColorOf(Color));
-  sh.set_;
-  NSColorOf(Color).setFill;
-  path := NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius(
-    NSMakeRect(X - OFF, Y, W, H), Radius, Radius);
-  path.fill;
-  NSGraphicsContext.currentContext.restoreGraphicsState;
+  // Keep the rounded-rect shadow in the same RGBA compositor as other platforms.
+  // The previous AppKit path parked the source shape 100000px offscreen and relied
+  // on NSShadow to move its blur back into view. AppKit clips that offscreen source
+  // in some window/snapshot contexts, making CSS box-shadow halos disappear (and
+  // flicker as animated elements repaint through different clipping regions).
+  inherited FillSoftShadow(X, Y, W, H, Radius, Blur, Color);
 end;
 
 procedure TCocoaCanvas.FillInsetShadow(X, Y, W, H, Radius, DX, DY, Blur, Spread: Single; Color: TTina4Color);
