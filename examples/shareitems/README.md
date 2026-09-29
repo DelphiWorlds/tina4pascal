@@ -26,3 +26,14 @@ ANDROID_SDK=/Users/dave/Library/Android/sdk \
 Install the resulting `build/android/ShareItems Demo.apk` on a device or emulator,
 tap a share action, and confirm Android opens its native chooser. The generated
 file/image payloads are written to the app's temporary directory before sharing.
+
+The iOS Simulator demo can be built after the repository's `iphonesim` toolchain
+is installed:
+
+```sh
+./build-sim.sh
+```
+
+This builds a dedicated arm64 Simulator app under `/tmp/tina4-shareitems-sim-dd`.
+Install it with Xcode or `simctl`; the same ShareItems HTML/actions are bundled
+into the simulator host and use the iOS `UIActivityViewController` bridge.

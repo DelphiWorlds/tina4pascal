@@ -235,8 +235,11 @@ request/completion bridge without introducing a third-party SDK.
   static archive.
 - [x] iOS Simulator toolchain/runtime provisioned; the native arm64 simulator
   engine and `ios/sim` Xcode host now compile and link successfully.
-- [ ] Wire the ShareItems demo/actions into the simulator host for a direct
-  chooser smoke test; the current simulator showcase is a separate host.
+- [x] Wire the ShareItems demo/actions into a dedicated simulator host; the
+  generated app now uses the shared iOS activity-controller bridge.
+- [x] Build/install the dedicated simulator app on an iPhone 16 Pro simulator;
+  the ShareItems UI renders successfully. Interactive chooser selection remains
+  a manual tap check because the command-line harness has no touch injection.
 - [ ] Existing unrelated suite failures remain in `test_crypto`, `test_authflow`,
   `test_secrets`, and `test_ssoflow`; `test_share_items` is green.
 

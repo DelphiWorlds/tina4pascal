@@ -27,11 +27,24 @@ uses
   CGContext,
   Tina4RenderBackend,
   Tina4ShellIOS,
-  Tina4Interact
+  Tina4Interact,
+  Tina4ShareItems,
+  Tina4ShareItemsIOS,
+  Tina4Capabilities
   {$I app_units.inc} ;
 
 var
   GCanvas: TIOSCanvas = nil;
+
+{ Completion callback used by the shared iOS ShareItems bridge. App units can
+  install their normal Tina4ShareItems completion handler; this C ABI entry
+  keeps the simulator host identical to the device host. }
+procedure tina4_share_result(Status: cint; Activity, Error: PAnsiChar); cdecl;
+  public name '_tina4_share_result';
+begin
+  Tina4ShareComplete(TTina4CapabilityStatus(Status),
+    string(AnsiString(Activity)), string(AnsiString(Error)));
+end;
 
 procedure EnsureCanvas;
 begin
