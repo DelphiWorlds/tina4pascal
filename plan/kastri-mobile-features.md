@@ -230,8 +230,11 @@ request/completion bridge without introducing a third-party SDK.
   `android/libs/zxing-core-3.5.3.jar`; the project build cache is local-only.
 - [x] Project APK provider authority is bundle-specific, so multiple Tina4
   apps can be installed on the same Android device without provider collisions.
-- [ ] iOS project-level Xcode build needs `xcodegen` on the development machine;
-  the Pascal archive and Objective-C bridge build without it.
+- [x] iOS project-level Xcode build now passes unsigned for the ShareItems demo
+  after installing `xcodegen` and disabling Xcode 27 chained fixups for the FPC
+  static archive.
+- [ ] iOS Simulator runtime/device smoke test still needs the repository's
+  patched `iphonesim` FPC toolchain and a usable CoreSimulator runtime.
 - [ ] Existing unrelated suite failures remain in `test_crypto`, `test_authflow`,
   `test_secrets`, and `test_ssoflow`; `test_share_items` is green.
 
@@ -241,7 +244,7 @@ request/completion bridge without introducing a third-party SDK.
 - (working tree) `test: add ShareItems integration demo`
 - (working tree) `fix: use scene-aware iOS ShareItems presenter`
 
-## Status: ShareItems implementation complete; iOS archive verified, project build awaits xcodegen
+## Status: ShareItems implementation complete; iOS unsigned project build verified
 
 ## References
 

@@ -7,7 +7,10 @@ name: Tina4Pascal
 options:
   bundleIdPrefix: com.tina4
   deploymentTarget:
-    iOS: "13.0"
+    # Xcode 27's iPhoneOS SDK supports deployment targets from iOS 15 onward.
+    # ShareItems itself uses scene APIs introduced in iOS 13, but this build
+    # template now follows the minimum supported target of the installed SDK.
+    iOS: "15.0"
 settings:
   base:
     DEVELOPMENT_TEAM: "5CSH5U4F8F"        # Apple Development team (change to yours)
@@ -31,7 +34,10 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon   # app/Assets.xcassets/AppIcon
         # link the Pascal engine + the Apple C frameworks it uses
         LIBRARY_SEARCH_PATHS: "$(SRCROOT)/app"
-        OTHER_LDFLAGS: "-ltina4ios"
+        # FPC's thread-variable tables contain 32-bit entries that Xcode 27's
+        # chained-fixup linker rejects as unaligned pointers. FPC owns these
+        # tables, so disable chained fixups for this mixed Pascal/Obj-C binary.
+        OTHER_LDFLAGS: "-Wl,-no_fixup_chains -ltina4ios"
     dependencies:
       - sdk: CoreGraphics.framework
       - sdk: CoreText.framework
