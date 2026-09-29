@@ -972,12 +972,14 @@ var
   function ReadSample(byteOff: Integer): Single;
   begin
     if isFloat then Result := Half2Single(PWord(data + byteOff)^)
+    else if bps = 2 then Result := PWord(data + byteOff)^ / 65535
     else Result := data[byteOff] / 255;
   end;
   procedure WriteSample(byteOff: Integer; v: Single);
   begin
     if v < 0 then v := 0; if v > 1 then v := 1;
     if isFloat then PWord(data + byteOff)^ := Single2Half(v)
+    else if bps = 2 then PWord(data + byteOff)^ := Round(v * 65535)
     else data[byteOff] := Round(v * 255);
   end;
 
@@ -988,6 +990,11 @@ begin
   isFloat := (rep.bitmapFormat and 4) <> 0;   // NSBitmapFormatFloatingPointSamples
   premult := (rep.bitmapFormat and 2) = 0;     // clear Nonpremultiplied bit
   bps := (rep.bitsPerPixel div 8) div 4;       // bytes per sample (1 or 2)
+  // 16-bit samples come in two flavours: half-float (isFloat, from the raw capture) and
+  // 16-bit unsigned integer — which is what bitmapImageRepByConvertingToColorSpace hands
+  // back when normalising to sRGB (a 64bpp rep with the float flag CLEARED). ReadSample/
+  // WriteSample dispatch on bps=2 for the integer case; without it the reads hit only the
+  // low byte of each sample and the whole filter chain silently no-ops.
   // NSBitmapFormatAlphaFirst (bit 0): the rep is ARGB, not RGBA — CGImageForProposedRect
   // hands back whichever the display/OS prefers, and it flipped to alpha-first. Read and
   // write each channel at its real offset instead of assuming R,G,B,A order, or filters
@@ -1223,6 +1230,7 @@ begin
     o00 := (i div pw) * sbpr + (i mod pw) * bps * 4;
     for sxi := 0 to 3 do
       if isFloat then src[i*4+sxi] := Half2Single(PWord(sdata + o00 + chOff[sxi])^)
+      else if bps = 2 then src[i*4+sxi] := PWord(sdata + o00 + chOff[sxi])^ / 65535  // 16-bit int (sRGB-converted rep)
       else src[i*4+sxi] := sdata[o00 + chOff[sxi]] / 255;
     if not premult then
     begin
