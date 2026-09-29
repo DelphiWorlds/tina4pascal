@@ -1,0 +1,6 @@
+{
+  "name": "Tina4 Lava Lamp",
+  "bundleId": "com.tina4.lavalamp",
+  "main": "main.pas",
+  "appUnits": ["AppLogic"]
+}

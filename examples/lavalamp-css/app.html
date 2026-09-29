@@ -1,0 +1,88 @@
+<!doctype html>
+<html><head><style>
+  /* A lava lamp in pure HTML + CSS — no canvas, no Pascal, no JS.
+     Merge/split is the "goo" filter trick: a parent blur() bleeds each blob's
+     edge into its neighbours and contrast() pushes the blurred ramp back toward
+     a hard edge, so blobs that touch fuse into one surface and pinch apart as
+     they separate. The goo layer keeps a TRANSPARENT background so the filter
+     only acts on the blobs (an opaque bg turns the whole layer into a block).
+     The engine animates the @keyframes on its own ticker. */
+
+  html,body{margin:0;height:100%}
+  body{background:#0b0710;color:#e7d8ff;font-family:sans-serif;
+       display:flex;flex-direction:column;align-items:center;
+       justify-content:center;padding:14px 16px}
+  h1{font-size:17px;font-weight:600;letter-spacing:.08em;margin:0 0 10px;
+     text-transform:uppercase}
+  p{color:#6b5b86;font-size:12px;margin:12px 0 0;letter-spacing:.05em}
+
+  .lamp{position:relative;width:220px;height:560px;
+        display:flex;flex-direction:column;align-items:center}
+
+  .cap{width:118px;height:26px;border-radius:8px 8px 4px 4px;
+       background:linear-gradient(#6b6880,#33323f);z-index:3}
+  .base{width:150px;height:42px;border-radius:6px 6px 14px 14px;
+        background:linear-gradient(#33323f,#6b6880);z-index:3;margin-top:-8px}
+
+  /* pill-shaped glass vessel with a lit liquid */
+  .glass{position:relative;width:176px;height:496px;overflow:hidden;
+         border-radius:88px;
+         background:radial-gradient(circle at 50% 72%, #5a3a8f 0%, #331e59 52%, #180f2c 100%);
+         box-shadow:inset 0 0 28px rgba(0,0,0,.45), 0 16px 50px rgba(0,0,0,.6);
+         border:1px solid #2a1c44}
+
+  /* the goo: blur+contrast fuses/splits the blobs. The engine's filter layer has
+     an opaque (dark) background, so the vessel interior reads black — a "black-lit"
+     lava lamp. Keep it inset:0 so the rounded top clips it cleanly, and keep every
+     blob clear of the bottom edge (below) so the filter never snaps into a slab. */
+  .goo{position:absolute;inset:0;filter:blur(7px) contrast(8)}
+  /* pixel left (percentage left isn't honoured for absolute children); glass is
+     176 wide, so ~centred is left ≈ 88 - width/2, with a little variety. */
+  .blob{position:absolute;border-radius:50%;background:#ff7d24}
+
+  /* a slim glass sheen, above the goo (unfiltered) */
+  .sheen{position:absolute;top:34px;left:24px;width:12px;height:300px;
+         border-radius:8px;z-index:2;
+         background:linear-gradient(rgba(255,255,255,.14),rgba(255,255,255,0))}
+
+  /* Staggered start heights so they're spread up the tube from the first frame
+     (the engine clamps negative animation-delay to 0). Different periods drift
+     in and out of phase, so blobs meet and part — merge and split — as they go.
+     Narrow enough that two side-by-side don't span the whole vessel. */
+  .b1{width:74px;height:74px;left:44px;top:280px;
+      animation:rise1 15s ease-in-out infinite}
+  .b2{width:56px;height:56px;left:40px;top:150px;
+      animation:rise2 19s ease-in-out infinite}
+  .b3{width:62px;height:62px;left:74px;top:70px;
+      animation:rise3 23s ease-in-out infinite}
+  .b4{width:50px;height:50px;left:66px;top:320px;
+      animation:rise1 17s ease-in-out infinite}
+  .b5{width:44px;height:44px;left:46px;top:210px;
+      animation:rise2 21s ease-in-out infinite}
+
+  /* Amplitudes keep the lowest reach well above the vessel bottom (~496px). */
+  @keyframes rise1{0%,100%{transform:translateY(0)} 50%{transform:translateY(-150px)}}
+  @keyframes rise2{0%,100%{transform:translateY(0)} 50%{transform:translateY(90px)}}
+  @keyframes rise3{0%,100%{transform:translateY(0)} 50%{transform:translateY(140px)}}
+</style></head><body>
+
+  <h1>Tina4 Lava Lamp &middot; CSS</h1>
+
+  <div class="lamp">
+    <div class="cap"></div>
+    <div class="glass">
+      <div class="goo">
+        <span class="blob b1"></span>
+        <span class="blob b2"></span>
+        <span class="blob b3"></span>
+        <span class="blob b4"></span>
+        <span class="blob b5"></span>
+      </div>
+      <div class="sheen"></div>
+    </div>
+    <div class="base"></div>
+  </div>
+
+  <p>pure HTML + CSS &middot; @keyframes + blur/contrast goo</p>
+
+</body></html>
