@@ -325,7 +325,7 @@ function Build-ProjectWin($proj, $t, $dbg) {
   Write-Host "Building $name for $t$(if($dbg){' (debug)'}) ..."
   Push-Location $proj
   try {
-    $fa = @('-Mdelphi') + $opt + $flags + @("-Fu$Src","-Fu.","-Fusrc\routes","-Fusrc\orm","-Fusrc\services","-FE$out","-FU$out","-o$name.exe",$main)
+    $fa = @('-Mdelphi') + $opt + $flags + @("-Fu$Src","-Fu.","-Fusrc","-Fusrc\app","-Fusrc\routes","-Fusrc\orm","-Fusrc\services","-FE$out","-FU$out","-o$name.exe",$main)
     & $fpc @fa 2>&1 | Where-Object { $_ -match 'Error|Fatal|Linking' } | ForEach-Object { Write-Host $_ }
   } finally { Pop-Location }
   $exe = Join-Path $out "$name.exe"

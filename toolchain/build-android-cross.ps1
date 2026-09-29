@@ -79,11 +79,20 @@ if (-not $Ndk) {
   }
 }
 if (-not $Ndk -or -not (Test-Path (Join-Path $Ndk 'toolchains\aarch64-linux-android-4.9'))) {
-  $zip = Join-Path $Out "android-ndk-$NDK_VER.zip"
-  if (-not (Test-Path $zip)) { Say "downloading NDK $NDK_VER (~1 GB)"; & curl.exe -L -o $zip $NDK_URL; if ($LASTEXITCODE -ne 0) { Die "NDK download failed" } }
+  # NB: local must NOT be named $zip — it would collide (case-insensitively) with
+  # the [switch]$Zip parameter and be type-constrained to a SwitchParameter.
+  $ndkZip = Join-Path $Out "android-ndk-$NDK_VER.zip"
+  if (-not (Test-Path $ndkZip)) { Say "downloading NDK $NDK_VER (~1 GB)"; & curl.exe -L -o $ndkZip $NDK_URL; if ($LASTEXITCODE -ne 0) { Die "NDK download failed" } }
   Say "extracting NDK"
-  & $ZipExe -q $zip -d $Out 2>$null   # zip.exe cannot unzip; fall back to Expand-Archive
-  if (-not (Test-Path (Join-Path $Out "android-ndk-$NDK_VER"))) { Expand-Archive -Path $zip -DestinationPath $Out -Force }
+  # Info-ZIP unzip.exe (FPC bundles it) is the right tool. The old code invoked
+  # zip.exe with -d, which cannot unzip and — under $ErrorActionPreference='Stop'
+  # — turned its stderr into a terminating NativeCommandError before the
+  # Expand-Archive fallback could run. Relax the preference around the native call.
+  $UnzipExe = Join-Path $FpcBin 'unzip.exe'
+  $prevEAP = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+  if (Test-Path $UnzipExe) { & $UnzipExe -q -o $ndkZip -d $Out > $null 2>&1 }
+  $ErrorActionPreference = $prevEAP
+  if (-not (Test-Path (Join-Path $Out "android-ndk-$NDK_VER"))) { Expand-Archive -Path $ndkZip -DestinationPath $Out -Force }
   $Ndk = Join-Path $Out "android-ndk-$NDK_VER"
 }
 if (-not (Test-Path (Join-Path $Ndk 'toolchains\aarch64-linux-android-4.9'))) { Die "NDK r21x with GNU binutils required at $Ndk" }
@@ -109,9 +118,6 @@ $Pack = Join-Path $Out 'pack'
 Remove-Item $Pack -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path (Join-Path $Pack 'bin\i386-win32') | Out-Null
 
-$FPKG = @('contnrs','dateutils','fpjson','generics.collections','generics.defaults',
-          'generics.hashes','generics.helpers','generics.memoryexpanders','generics.strings',
-          'jsonparser','jsonreader','jsonscanner','syncobjs','variants','varutils')
 
 function Build-Abi($cpu, $target, $suf, $tc, $prefix, $abiOpt, $abiFlags) {
   Say "=== building $target ($cpu) cross ==="
@@ -166,11 +172,20 @@ function Build-Abi($cpu, $target, $suf, $tc, $prefix, $abiOpt, $abiFlags) {
   Copy-Item (Join-Path $rtlU '*.o')   (Join-Path $Pack "units\$u\rtl") -Force
   Copy-Item (Join-Path $harvest 'jni.ppu') (Join-Path $Pack "units\$u\jni") -Force
   Copy-Item (Join-Path $harvest 'jni.o')   (Join-Path $Pack "units\$u\jni") -Force
-  foreach ($f in $FPKG) {
-    Copy-Item (Join-Path $harvest "$f.ppu") (Join-Path $Pack "units\$u\fpkg") -Force -ErrorAction SilentlyContinue
-    Copy-Item (Join-Path $harvest "$f.o")   (Join-Path $Pack "units\$u\fpkg") -Force -ErrorAction SilentlyContinue
+  # Copy EVERY harvested unit (the engine's full transitive closure) into fpkg,
+  # except the core RTL units (already shipped under rtl\) and jni (under jni\).
+  # A prior hardcoded list silently omitted units the engine pulls in — e.g.
+  # base64 via Tina4RenderBackend — so the app .so build failed with
+  # "Can't find unit base64". Harvesting the closure keeps the pack complete.
+  Get-ChildItem (Join-Path $harvest '*.ppu') | ForEach-Object {
+    $base = $_.BaseName
+    if ($base -eq 'jni') { return }
+    if (Test-Path (Join-Path $rtlU "$base.ppu")) { return }
+    Copy-Item $_.FullName (Join-Path $Pack "units\$u\fpkg") -Force
+    $obj = Join-Path $harvest "$base.o"
+    if (Test-Path $obj) { Copy-Item $obj (Join-Path $Pack "units\$u\fpkg") -Force }
   }
-  Say "  $u: ppcross$suf.exe + $((Get-ChildItem (Join-Path $Pack "units\$u") -Recurse -Filter *.ppu).Count) units"
+  Say "  ${u}: ppcross$suf.exe + $((Get-ChildItem (Join-Path $Pack "units\$u") -Recurse -Filter *.ppu).Count) units"
 }
 
 Build-Abi 'aarch64' 'aarch64' 'a64' 'aarch64-linux-android-4.9' 'aarch64-linux-android-' '' @('-Paarch64')
