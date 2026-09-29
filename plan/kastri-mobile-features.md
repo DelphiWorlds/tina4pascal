@@ -233,8 +233,10 @@ request/completion bridge without introducing a third-party SDK.
 - [x] iOS project-level Xcode build now passes unsigned for the ShareItems demo
   after installing `xcodegen` and disabling Xcode 27 chained fixups for the FPC
   static archive.
-- [ ] iOS Simulator runtime/device smoke test still needs the repository's
-  patched `iphonesim` FPC toolchain and a usable CoreSimulator runtime.
+- [x] iOS Simulator toolchain/runtime provisioned; the native arm64 simulator
+  engine and `ios/sim` Xcode host now compile and link successfully.
+- [ ] Wire the ShareItems demo/actions into the simulator host for a direct
+  chooser smoke test; the current simulator showcase is a separate host.
 - [ ] Existing unrelated suite failures remain in `test_crypto`, `test_authflow`,
   `test_secrets`, and `test_ssoflow`; `test_share_items` is green.
 
