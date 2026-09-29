@@ -102,6 +102,13 @@ type
       const ParentStyle: TComputedStyle; CX, CY, CW: Single; out UsedH: Single);
     function LayoutBlock(Parent: TLayoutBox; Tag: THTMLTag;
       const ParentStyle: TComputedStyle; X, Y, AvailW: Single): Single;
+    { Lay out one out-of-flow (position:absolute/fixed) child of a container box.
+      Builds the box, sizes it (inset stretch / shrink-to-fit) and positions it
+      against the container's padding box. Shared by the block and flex paths so an
+      abs child never participates in its container's normal/flex flow (CSS
+      Flexbox §4.1). CX/CY/CW are the container's content box. }
+    procedure LayoutAbsChild(Box: TLayoutBox; c: THTMLTag;
+      const cs, ParentStyle: TComputedStyle; CX, CY, CW: Single);
     function LayoutTable(Parent: TLayoutBox; Tag: THTMLTag;
       const Style: TComputedStyle; X, Y, AvailW: Single): Single;
     function MakeInlineBlock(Tag: THTMLTag; const St: TComputedStyle): TLayoutBox;
@@ -2635,6 +2642,7 @@ var
   probeBox, probeChild: TLayoutBox;
   items: TObjectList<TLayoutBox>;
   itemTags: TList<THTMLTag>;
+  absTags: TList<THTMLTag>;
   c: THTMLTag;
   ridx: Integer;
   runText: string;   // accumulates a contiguous text run → anonymous flex item
@@ -2708,6 +2716,7 @@ begin
   // each item at content width.
   items := TObjectList<TLayoutBox>.Create(False);
   itemTags := TList<THTMLTag>.Create;
+  absTags := TList<THTMLTag>.Create;   // out-of-flow children, positioned after sizing
   try
     runText := '';
     for c in Tag.Children do
@@ -2715,6 +2724,11 @@ begin
       if IsTextNode(c) then begin runText := runText + c.Text; Continue; end;
       cs := TComputedStyle.ForTag(c, st, FSheet);
       if LowerCase(cs.Display) = 'none' then Continue;
+      // Out-of-flow children don't participate in flex layout (CSS Flexbox §4.1):
+      // an absolutely-positioned/fixed child takes no space and doesn't shift its
+      // siblings. Collect it and position it after the box is sized.
+      if SameText(cs.CSSPosition, 'absolute') or SameText(cs.CSSPosition, 'fixed') then
+      begin absTags.Add(c); Continue; end;
       // a contiguous text run before this element is its own anonymous flex item
       if Trim(runText) <> '' then itemTags.Add(MakeAnonTextItem(Tag, runText));
       runText := '';
@@ -3271,6 +3285,13 @@ begin
     end;
     if natW + edgeL + edgeR > box.NaturalW then box.NaturalW := natW + edgeL + edgeR;
   finally
+    // out-of-flow children: positioned against this flex box's padding box now
+    // that it is sized (they never took part in the flex flow above). Done in the
+    // finally so every early-Exit branch (column-/row-wrap) still places them.
+    for k := 0 to absTags.Count - 1 do
+      LayoutAbsChild(box, absTags[k],
+        TComputedStyle.ForTag(absTags[k], st, FSheet), st, contentX, contentY, contentW);
+    absTags.Free;
     items.Free;
     itemTags.Free;
   end;
@@ -3887,6 +3908,80 @@ type
     LineBreak: Boolean;    // <br>
     LeadMargin: Boolean;   // a margin-LEFT spacer (belongs to the NEXT item; carry it on wrap)
   end;
+
+{ Lay out one out-of-flow (position:absolute/fixed) child. Shared by the block
+  and flex paths — see the declaration for the contract. }
+procedure TLayoutEngine.LayoutAbsChild(Box: TLayoutBox; c: THTMLTag;
+  const cs, ParentStyle: TComputedStyle; CX, CY, CW: Single);
+var absBox: TLayoutBox; absX, absY, absCH: Single;
+begin
+  // Replaced elements (img/svg/qrcode) are set up by MakeReplacedBox, which
+  // LayoutBlock never calls — so an absolutely-positioned <img> would never
+  // load or paint its image. Build it here (nil for ordinary elements, which
+  // then take the normal block path).
+  absBox := MakeReplacedBox(c, cs, CW);
+  if absBox <> nil then
+    Box.Children.Add(absBox)
+  else
+  begin
+    LayoutBlock(Box, c, ParentStyle, CX, CY, CW);
+    absBox := Box.Children[Box.Children.Count - 1];
+  end;
+  // left+right both pinned with no explicit width → stretch to fill the gap
+  // (CSS: the width resolves to containing-block − left − right). Same for
+  // top+bottom → stretch the height. This is what `inset:Npx` relies on.
+  if (ResolveSize(cs.ExplicitWidth, CW) < 0) and (cs.CSSLeft > -9998) and (cs.CSSRight > -9998) then
+    // stretch across the containing block's PADDING box (content + padding)
+    absBox.W := Max(0, (CW + ParentStyle.Padding.Left + ParentStyle.Padding.Right)
+                       - cs.CSSLeft - cs.CSSRight)
+  // Shrink-to-fit: an out-of-flow box with no explicit width sizes to its
+  // content (CSS "shrink-to-fit"), not the full container — e.g. a pill
+  // pinned with `right` only should hug its text, not span the row.
+  else if (ResolveSize(cs.ExplicitWidth, CW) < 0) and (absBox.NaturalW > 0) then
+  begin
+    absCH := absBox.NaturalW + cs.Padding.Horz + cs.BorderWidths.Horz;
+    if absCH < absBox.W then absBox.W := absCH;
+  end;
+  if (ResolveSize(cs.ExplicitHeight, 0) < 0) and (cs.CSSTop > -9998) and (cs.CSSBottom > -9998) then
+  begin
+    absCH := ResolveSize(ParentStyle.ExplicitHeight, 0);
+    if absCH < 0 then absCH := Box.NaturalH;
+    absBox.H := Max(0, (absCH + ParentStyle.Padding.Top + ParentStyle.Padding.Bottom)
+                       - cs.CSSTop - cs.CSSBottom);
+  end;
+  // fixed is viewport-relative (origin 0,0); absolute is container-relative.
+  // Paint (PaintBoxEx) drops the scroll offset for fixed so it stays put.
+  if SameText(cs.CSSPosition, 'fixed') then
+  begin
+    absX := 0; absY := 0;
+    if cs.CSSLeft > -9998 then absX := cs.CSSLeft
+    else if cs.CSSRight > -9998 then absX := CX + CW - absBox.W - cs.CSSRight;
+    if cs.CSSTop > -9998 then absY := cs.CSSTop
+    else if cs.CSSBottom > -9998 then          // pin to the viewport bottom
+      absY := FViewportH - absBox.H - cs.CSSBottom;
+    ShiftBoxTree(absBox, absX - absBox.X, absY - absBox.Y);
+    Exit;
+  end;
+  // An absolute box is positioned against its containing block's PADDING
+  // box (CSS), not its content box — so `left:0`/`top:0` sit at the inner
+  // border edge, clearing the padding (the common badge-in-a-padded-card
+  // pattern). CX/CY/CW are the content box; back out the padding to reach
+  // the padding box. Auto left/top keep the static-position approximation.
+  absX := CX; absY := CY;
+  if cs.CSSLeft > -9998 then absX := (CX - ParentStyle.Padding.Left) + cs.CSSLeft
+  else if cs.CSSRight > -9998 then
+    absX := (CX + CW + ParentStyle.Padding.Right) - absBox.W - cs.CSSRight;
+  if cs.CSSTop > -9998 then absY := (CY - ParentStyle.Padding.Top) + cs.CSSTop
+  else if cs.CSSBottom > -9998 then
+  begin
+    // bottom needs the container content height — use its explicit
+    // height (known now via the container's own style)
+    absCH := ResolveSize(ParentStyle.ExplicitHeight, 0);
+    if absCH < 0 then absCH := Box.NaturalH;
+    absY := (CY + absCH + ParentStyle.Padding.Bottom) - absBox.H - cs.CSSBottom;
+  end;
+  ShiftBoxTree(absBox, absX - absBox.X, absY - absBox.Y);
+end;
 
 { Lay out the mixed inline/block children of Tag into Box.
   CX,CY = content origin (absolute), CW = content width. }
@@ -5087,77 +5182,10 @@ begin
       cs := TComputedStyle.ForTag(c, ParentStyle, FSheet);
       disp := DisplayOf(c, cs);
       if disp = 'none' then Continue;
-      // position: absolute/fixed — out of flow, positioned in this container's
-      // content box (the common case: an absolutely-positioned child of a
-      // position:relative parent). Takes no space; siblings ignore it.
+      // position: absolute/fixed — out of flow (shared helper), takes no space.
       if SameText(cs.CSSPosition, 'absolute') or SameText(cs.CSSPosition, 'fixed') then
       begin
-        // Replaced elements (img/svg/qrcode) are set up by MakeReplacedBox, which
-        // LayoutBlock never calls — so an absolutely-positioned <img> would never
-        // load or paint its image. Build it here (nil for ordinary elements, which
-        // then take the normal block path).
-        absBox := MakeReplacedBox(c, cs, CW);
-        if absBox <> nil then
-          Box.Children.Add(absBox)
-        else
-        begin
-          LayoutBlock(Box, c, ParentStyle, CX, CY, CW);
-          absBox := Box.Children[Box.Children.Count - 1];
-        end;
-        // left+right both pinned with no explicit width → stretch to fill the gap
-        // (CSS: the width resolves to containing-block − left − right). Same for
-        // top+bottom → stretch the height. This is what `inset:Npx` relies on.
-        if (ResolveSize(cs.ExplicitWidth, CW) < 0) and (cs.CSSLeft > -9998) and (cs.CSSRight > -9998) then
-          // stretch across the containing block's PADDING box (content + padding)
-          absBox.W := Max(0, (CW + ParentStyle.Padding.Left + ParentStyle.Padding.Right)
-                             - cs.CSSLeft - cs.CSSRight)
-        // Shrink-to-fit: an out-of-flow box with no explicit width sizes to its
-        // content (CSS "shrink-to-fit"), not the full container — e.g. a pill
-        // pinned with `right` only should hug its text, not span the row.
-        else if (ResolveSize(cs.ExplicitWidth, CW) < 0) and (absBox.NaturalW > 0) then
-        begin
-          absCH := absBox.NaturalW + cs.Padding.Horz + cs.BorderWidths.Horz;
-          if absCH < absBox.W then absBox.W := absCH;
-        end;
-        if (ResolveSize(cs.ExplicitHeight, 0) < 0) and (cs.CSSTop > -9998) and (cs.CSSBottom > -9998) then
-        begin
-          absCH := ResolveSize(ParentStyle.ExplicitHeight, 0);
-          if absCH < 0 then absCH := Box.NaturalH;
-          absBox.H := Max(0, (absCH + ParentStyle.Padding.Top + ParentStyle.Padding.Bottom)
-                             - cs.CSSTop - cs.CSSBottom);
-        end;
-        // fixed is viewport-relative (origin 0,0); absolute is container-relative.
-        // Paint (PaintBoxEx) drops the scroll offset for fixed so it stays put.
-        if SameText(cs.CSSPosition, 'fixed') then
-        begin
-          absX := 0; absY := 0;
-          if cs.CSSLeft > -9998 then absX := cs.CSSLeft
-          else if cs.CSSRight > -9998 then absX := CX + CW - absBox.W - cs.CSSRight;
-          if cs.CSSTop > -9998 then absY := cs.CSSTop
-          else if cs.CSSBottom > -9998 then          // pin to the viewport bottom
-            absY := FViewportH - absBox.H - cs.CSSBottom;
-          ShiftBoxTree(absBox, absX - absBox.X, absY - absBox.Y);
-          Continue;
-        end;
-        // An absolute box is positioned against its containing block's PADDING
-        // box (CSS), not its content box — so `left:0`/`top:0` sit at the inner
-        // border edge, clearing the padding (the common badge-in-a-padded-card
-        // pattern). CX/CY/CW are the content box; back out the padding to reach
-        // the padding box. Auto left/top keep the static-position approximation.
-        absX := CX; absY := CY;
-        if cs.CSSLeft > -9998 then absX := (CX - ParentStyle.Padding.Left) + cs.CSSLeft
-        else if cs.CSSRight > -9998 then
-          absX := (CX + CW + ParentStyle.Padding.Right) - absBox.W - cs.CSSRight;
-        if cs.CSSTop > -9998 then absY := (CY - ParentStyle.Padding.Top) + cs.CSSTop
-        else if cs.CSSBottom > -9998 then
-        begin
-          // bottom needs the container content height — use its explicit
-          // height (known now via the container's own style)
-          absCH := ResolveSize(ParentStyle.ExplicitHeight, 0);
-          if absCH < 0 then absCH := Box.NaturalH;
-          absY := (CY + absCH + ParentStyle.Padding.Bottom) - absBox.H - cs.CSSBottom;
-        end;
-        ShiftBoxTree(absBox, absX - absBox.X, absY - absBox.Y);
+        LayoutAbsChild(Box, c, cs, ParentStyle, CX, CY, CW);
         Continue;  // no flow advance
       end;
       // float: left/right — taken out of normal vertical flow and pinned to the
@@ -6074,6 +6102,8 @@ var
   base: TComputedStyle;
   usedH: Single;
   body: THTMLTag;
+  bodyWrap: TLayoutBox;
+  bodyForceH: Single;
 
   function FindBody(T: THTMLTag): THTMLTag;
   var c, r: THTMLTag;
@@ -6111,9 +6141,34 @@ begin
     ResetCounterState;   // counters restart each Build (document-order traversal)
     InjectPseudo(body);
   end;
+  base := TComputedStyle.ForTag(body, base, FSheet);
+  // A flex/grid <body> is a flex/grid CONTAINER like any other element (CSS
+  // Flexbox §3: display:flex on ANY element, including the root's body, makes it a
+  // flex container). The block path below can't centre/justify, so route a
+  // flex/grid body through LayoutFlex/LayoutGrid via a throwaway parent and use
+  // the produced box as the root. A definite height (height:100%/100vh or
+  // min-height) makes the container fill the viewport so justify-content can
+  // centre on the cross/main axis.
+  if IsFlexOrGrid(base) then
+  begin
+    bodyWrap := TLayoutBox.Create;
+    try
+      bodyWrap.W := ViewportW;
+      if (base.ExplicitHeight <> -1) or (base.MinHeight <> -1) then
+        bodyForceH := ViewportH else bodyForceH := -1;
+      if (LowerCase(base.Display) = 'flex') or (LowerCase(base.Display) = 'inline-flex') then
+        LayoutFlex(bodyWrap, body, FBaseStyle, 0, 0, ViewportW, bodyForceH)
+      else
+        LayoutGrid(bodyWrap, body, FBaseStyle, 0, 0, ViewportW);
+      Result := bodyWrap.Children.Extract(bodyWrap.Children[0]);
+    finally
+      bodyWrap.Free;
+    end;
+    Exit;
+  end;
   Result := TLayoutBox.Create;
   Result.Tag := body;
-  Result.Style := TComputedStyle.ForTag(body, base, FSheet);
+  Result.Style := base;
   Result.X := 0; Result.Y := 0; Result.W := ViewportW;
   LayoutChildren(Result, body, Result.Style,
     Result.Style.Padding.Left + Result.Style.Margin.Left,
