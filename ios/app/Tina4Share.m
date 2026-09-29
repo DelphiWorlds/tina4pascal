@@ -9,6 +9,22 @@ static void Tina4ShareResult(int status, NSString *activity, NSString *error) {
     tina4_share_result(status, activity.UTF8String ?: "", error.UTF8String ?: "");
 }
 
+static UIViewController *Tina4SharePresenter(void) {
+    for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+        if (scene.activationState != UISceneActivationStateForegroundActive ||
+            ![scene isKindOfClass:[UIWindowScene class]]) continue;
+        for (UIWindow *window in ((UIWindowScene *)scene).windows) {
+            if (window.isKeyWindow && window.rootViewController) {
+                UIViewController *controller = window.rootViewController;
+                while (controller.presentedViewController)
+                    controller = controller.presentedViewController;
+                return controller;
+            }
+        }
+    }
+    return nil;
+}
+
 void tina4_ios_share_items(const char *json, const char *anchor) {
     NSString *source = json ? [NSString stringWithUTF8String:json] : @"[]";
     NSData *data = [source dataUsingEncoding:NSUTF8StringEncoding];
@@ -36,8 +52,7 @@ void tina4_ios_share_items(const char *json, const char *anchor) {
             return;
         }
 
-        UIViewController *presenter = UIApplication.sharedApplication.keyWindow.rootViewController;
-        while (presenter.presentedViewController) presenter = presenter.presentedViewController;
+        UIViewController *presenter = Tina4SharePresenter();
         if (!presenter) {
             Tina4ShareResult(5, @"", @"no presenting view controller");
             return;
@@ -49,7 +64,7 @@ void tina4_ios_share_items(const char *json, const char *anchor) {
             Tina4ShareResult(activityError ? 7 : (completed ? 0 : 6),
                              activityType ?: @"", activityError.localizedDescription ?: @"");
         };
-        if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) {
+        if (UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPad) {
             vc.popoverPresentationController.sourceView = presenter.view;
             vc.popoverPresentationController.sourceRect = CGRectMake(CGRectGetMidX(presenter.view.bounds),
                                                                       CGRectGetMidY(presenter.view.bounds), 1, 1);

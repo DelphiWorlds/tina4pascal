@@ -195,7 +195,7 @@ request/completion bridge without introducing a third-party SDK.
 | AdMob | planned native SDK bridge | planned Google SDK bridge | documented placeholder | Assessment |
 | Location foreground | planned Core Location bridge | planned platform provider bridge | planned placeholder/WinRT later | Assessment |
 | Location background | separate milestone | separate milestone/foreground service | placeholder | Assessment |
-| ShareItems | ✅ activity controller bridge | ✅ chooser + private content provider | ✅ explicit unsupported adapter | Implemented; native smoke test pending |
+| ShareItems | ✅ activity controller bridge | ✅ chooser + private content provider | ✅ explicit unsupported adapter | Implemented; iOS archive/syntax verified |
 
 ## Tests (to be written before implementation)
 
@@ -204,7 +204,8 @@ request/completion bridge without introducing a third-party SDK.
 - [x] ShareItems: text, one file, image, multiple mixed items, invalid path, no
   handler, user cancellation, and MIME propagation.
 - [x] Portable contract test: `tests/test_share_items.pas` — 7 assertions pass.
-- [x] iOS Pascal archive and Objective-C bridge syntax check.
+- [x] iOS Pascal archive and Objective-C bridge syntax check; the presenter uses
+  foreground `UIWindowScene` discovery for iOS 13+.
 - [x] Android APK/device smoke test — the ShareItems demo APK packages,
   installs beside the reference app, opens Android's native chooser, and
   stages file payloads through the private provider.
@@ -229,6 +230,8 @@ request/completion bridge without introducing a third-party SDK.
   `android/libs/zxing-core-3.5.3.jar`; the project build cache is local-only.
 - [x] Project APK provider authority is bundle-specific, so multiple Tina4
   apps can be installed on the same Android device without provider collisions.
+- [ ] iOS project-level Xcode build needs `xcodegen` on the development machine;
+  the Pascal archive and Objective-C bridge build without it.
 - [ ] Existing unrelated suite failures remain in `test_crypto`, `test_authflow`,
   `test_secrets`, and `test_ssoflow`; `test_share_items` is green.
 
@@ -236,8 +239,9 @@ request/completion bridge without introducing a third-party SDK.
 
 - (working tree) `feat: add capability contract and ShareItems adapters`
 - (working tree) `test: add ShareItems integration demo`
+- (working tree) `fix: use scene-aware iOS ShareItems presenter`
 
-## Status: ShareItems implementation complete; demo and Android chooser smoke test verified
+## Status: ShareItems implementation complete; iOS archive verified, project build awaits xcodegen
 
 ## References
 
