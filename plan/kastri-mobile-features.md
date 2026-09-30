@@ -243,6 +243,9 @@ request/completion bridge without introducing a third-party SDK.
 - [x] Build/install the dedicated simulator app on an iPhone 16 Pro simulator;
   the ShareItems UI renders successfully. Interactive chooser selection remains
   a manual tap check because the command-line harness has no touch injection.
+- [x] Build/install the dedicated Location simulator app on the iPhone 16 Pro
+  simulator; the Location UI renders successfully. Permission/update actions
+  remain manual taps because the command-line harness has no touch injection.
 - [ ] Existing unrelated suite failures remain in `test_crypto`, `test_authflow`,
   `test_secrets`, and `test_ssoflow`; `test_share_items` is green.
 

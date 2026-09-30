@@ -24,6 +24,7 @@ final class Tina4View: UIView {
     // otherwise fall back to the generated live clock.
     private lazy var bundledHTML: String? =
         (Bundle.main.url(forResource: "shareitems", withExtension: "html") ??
+         Bundle.main.url(forResource: "location", withExtension: "html") ??
          Bundle.main.url(forResource: "demo", withExtension: "html"))
             .flatMap { try? String(contentsOf: $0, encoding: .utf8) }
 

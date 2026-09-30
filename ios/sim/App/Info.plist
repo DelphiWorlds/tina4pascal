@@ -26,5 +26,7 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Use your location while the app is in the foreground.</string>
 </dict>
 </plist>

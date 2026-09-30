@@ -21,6 +21,7 @@ targets:
       - sdk: CoreFoundation.framework
       - sdk: ImageIO.framework
       - sdk: MobileCoreServices.framework
+      - sdk: CoreLocation.framework
     info:
       path: App/Info.plist
       properties:
