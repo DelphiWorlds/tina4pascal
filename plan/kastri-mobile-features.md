@@ -196,7 +196,7 @@ request/completion bridge without introducing a third-party SDK.
 | Location foreground | planned Core Location bridge | planned platform provider bridge | planned placeholder/WinRT later | Assessment |
 | Location background | ✅ opt-in Core Location updates | separate milestone/foreground service | placeholder | Implemented on iOS |
 | ShareItems | ✅ activity controller bridge | ✅ chooser + private content provider | ✅ explicit unsupported adapter | Implemented; iOS archive/syntax verified |
-| Location foreground | ✅ Core Location bridge | ❌ | ❌ | iOS + macOS adapter implemented; Android/Windows remain |
+| Location foreground | ✅ Core Location bridge | ✅ platform `LocationManager` bridge | ❌ | iOS + macOS + Android adapters implemented; Windows remains |
 
 ## Tests (to be written before implementation)
 
