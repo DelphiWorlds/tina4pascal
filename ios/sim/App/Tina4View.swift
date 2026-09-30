@@ -72,7 +72,11 @@ final class Tina4View: UIView {
         _ = tina4sim_native_touch(0, Float(p.x), Float(p.y))
         _ = tina4sim_native_touch(1, Float(p.x), Float(p.y))
         accentPink.toggle()
-        loadHTML(); setNeedsDisplay()
+        // Actions can update the live DOM (for example the Location demo's
+        // status text). Reloading the source HTML here would discard those
+        // changes immediately after the tap. The native frame renderer reads
+        // the updated DOM on the next draw instead.
+        setNeedsDisplay()
     }
 
     private func loadHTML() {
