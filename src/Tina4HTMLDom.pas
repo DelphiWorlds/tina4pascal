@@ -1468,10 +1468,9 @@ end;
 
 function MatchesSingleSelector(const Sel: string; Tag: THTMLTag): Boolean;
 var
-  SelTag, SelClass, SelId: string;
-  DotPos, HashPos: Integer;
+  SelTag, SelId: string;
   RequireHover, RequireActive, RequireFocus, RequireChecked: Boolean;
-  S, Suffix, Inner, V, Rest, TagClass, TagId, ClsPart: string;
+  S, Suffix, Inner, V, TagClass, TagId, ClsPart: string;
   ColonIdx, BracketStart, BracketEnd, EqIdx: Integer;
   AttrChecks: array of TPair<string, string>;
   APair, Check: TPair<string, string>;
@@ -1482,8 +1481,10 @@ var
   NotChecks: array of string;
   NotInner, NC: string;
   NotStart, NotJ, NotDepth: Integer;
-  Classes: TStringArray;
+  Classes, SelClasses: TStringArray;
   Found: Boolean;
+  PScan, PEnd, ci2: Integer;
+  DelimCh: Char; Tok: string;
 begin
   Result := False;
   if not Assigned(Tag) or (Tag.TagName = '#text') or (Tag.TagName = 'root') then
@@ -1494,7 +1495,6 @@ begin
   // Parse selector into tag, class, id parts
   // e.g., "div.container#main" -> tag=div, class=container, id=main
   SelTag := '';
-  SelClass := '';
   SelId := '';
   RequireHover := False;
   RequireActive := False;
@@ -1611,37 +1611,32 @@ begin
       S := S.Remove(BracketStart, BracketEnd - BracketStart + 1);
     end;
   end;
-  HashPos := S.IndexOf('#');
-  DotPos := S.IndexOf('.');
-
-  if (HashPos >= 0) and ((DotPos < 0) or (HashPos < DotPos)) then
+  // S is now a compound selector — a tag (optional) followed by any number of
+  // .class and #id simple selectors in any order (e.g. `div.a.b#main`, `.dot.on`).
+  // Scan it: the leading run up to the first '.'/'#' is the tag, then each
+  // '.'/'#' segment is a required class / id. ALL listed classes must be present.
+  SetLength(SelClasses, 0);
+  PScan := 0;
+  while (PScan < Length(S)) and (S.Chars[PScan] <> '.') and (S.Chars[PScan] <> '#') do
+    Inc(PScan);
+  SelTag := S.Substring(0, PScan);
+  while PScan < Length(S) do
   begin
-    SelTag := S.Substring(0, HashPos);
-    Rest := S.Substring(HashPos + 1);
-    DotPos := Rest.IndexOf('.');
-    if DotPos >= 0 then
-    begin
-      SelId := Rest.Substring(0, DotPos);
-      SelClass := Rest.Substring(DotPos + 1);
-    end
-    else
-      SelId := Rest;
-  end
-  else if DotPos >= 0 then
-  begin
-    SelTag := S.Substring(0, DotPos);
-    Rest := S.Substring(DotPos + 1);
-    HashPos := Rest.IndexOf('#');
-    if HashPos >= 0 then
-    begin
-      SelClass := Rest.Substring(0, HashPos);
-      SelId := Rest.Substring(HashPos + 1);
-    end
-    else
-      SelClass := Rest;
-  end
-  else
-    SelTag := S;
+    DelimCh := S.Chars[PScan]; Inc(PScan);
+    PEnd := PScan;
+    while (PEnd < Length(S)) and (S.Chars[PEnd] <> '.') and (S.Chars[PEnd] <> '#') do
+      Inc(PEnd);
+    Tok := S.Substring(PScan, PEnd - PScan);
+    if Tok <> '' then
+      if DelimCh = '.' then
+      begin
+        SetLength(SelClasses, Length(SelClasses) + 1);
+        SelClasses[High(SelClasses)] := Tok;
+      end
+      else
+        SelId := Tok;    // last #id wins (a compound with two ids can't match anyway)
+    PScan := PEnd;
+  end;
 
   // Match tag name
   if (SelTag <> '') and (SelTag <> '*') then
@@ -1649,20 +1644,22 @@ begin
     if not SameText(SelTag, Tag.TagName) then Exit;
   end;
 
-  // Match class
-  if SelClass <> '' then
+  // Match classes — every class in the compound must be on the element.
+  if Length(SelClasses) > 0 then
   begin
     TagClass := Tag.GetAttribute('class', '').ToLower;
-    // Support multiple classes on element
     Classes := TagClass.Split([' ']);
-    Found := False;
-    for ClsPart in Classes do
-      if SameText(ClsPart.Trim, SelClass) then
-      begin
-        Found := True;
-        Break;
-      end;
-    if not Found then Exit;
+    for ci2 := 0 to High(SelClasses) do
+    begin
+      Found := False;
+      for ClsPart in Classes do
+        if SameText(ClsPart.Trim, SelClasses[ci2]) then
+        begin
+          Found := True;
+          Break;
+        end;
+      if not Found then Exit;
+    end;
   end;
 
   // Match ID
@@ -1675,7 +1672,7 @@ begin
   // Must have matched at least something — the bare-pseudo or bare-attr
   // case (e.g. `:hover` or `[disabled]`) is allowed when one of the
   // pseudo-class flags is required or an attribute check is in play.
-  if (SelTag = '') and (SelClass = '') and (SelId = '') and
+  if (SelTag = '') and (Length(SelClasses) = 0) and (SelId = '') and
      (not (RequireHover or RequireActive or RequireFocus or RequireChecked)) and
      (Length(AttrChecks) = 0) and (Length(StructChecks) = 0) and
      (Length(NotChecks) = 0) then Exit;
