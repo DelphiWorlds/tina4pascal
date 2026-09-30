@@ -1461,7 +1461,9 @@ proj_ios_deploy() {
     -destination 'generic/platform=iOS' DEVELOPMENT_TEAM="$iteam" \
     -allowProvisioningUpdates -derivedDataPath "$iwork/dd" build 2>&1 \
     | grep -qE "BUILD SUCCEEDED" || die "build/sign failed (set your team in App Store Connect)"
-  app="$(find "$iwork/dd/Build/Products" -maxdepth 2 -name '*.app' -path '*iphoneos*' | head -1)"
+  # `xcodebuild build` defaults to Debug; do not accidentally pick up a stale
+  # unsigned Release app left by the separate link-check build.
+  app="$(find "$iwork/dd/Build/Products" -maxdepth 2 -name '*.app' -path '*Debug-iphoneos*' | head -1)"
   say "→ installing on ${udid}..."
   xcrun devicectl device install app --device "$udid" "$app" >/dev/null 2>&1 \
     || die "install failed (iPhone unlocked?)"
