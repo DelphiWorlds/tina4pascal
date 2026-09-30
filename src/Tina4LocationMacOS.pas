@@ -9,7 +9,7 @@ procedure InstallMacOSLocation;
 
 implementation
 
-uses CocoaAll, CoreLocation, Tina4Location, Tina4Capabilities;
+uses Classes, CocoaAll, CoreLocation, Tina4Location, Tina4Capabilities;
 
 type
   { The FPC 3.2.2 CoreLocation binding predates this selector. }
@@ -32,13 +32,46 @@ type
 
 var GDelegate: TLocationDelegate = nil;
 
+type
+  TQueuedLocation = class
+    Status: TTina4CapabilityStatus;
+    Location: TTina4Location;
+    Error: string;
+    procedure Deliver;
+  end;
+
+procedure TQueuedLocation.Deliver;
+begin
+  try
+    Tina4LocationDeliver(Status, Location.Latitude, Location.Longitude,
+      Location.Accuracy, Location.Altitude, Location.Speed, Location.Timestamp,
+      Error);
+  finally
+    Free;
+  end;
+end;
+
+procedure QueueLocation(Status: TTina4CapabilityStatus;
+  Latitude, Longitude, Accuracy, Altitude, Speed, Timestamp: Double;
+  const Error: string);
+var Q: TQueuedLocation;
+begin
+  Q := TQueuedLocation.Create;
+  Q.Status := Status;
+  Q.Location.Latitude := Latitude; Q.Location.Longitude := Longitude;
+  Q.Location.Accuracy := Accuracy; Q.Location.Altitude := Altitude;
+  Q.Location.Speed := Speed; Q.Location.Timestamp := Timestamp;
+  Q.Error := Error;
+  TThread.Queue(nil, Q.Deliver);
+end;
+
 procedure DeliverLocation(Location: CLLocation);
 var C: CLLocationCoordinate2D; D: Double;
 begin
   if Location = nil then Exit;
   C := Location.coordinate; D := 0;
   if Location.timestamp <> nil then D := Location.timestamp.timeIntervalSince1970;
-  Tina4LocationDeliver(tcsSuccess, C.latitude, C.longitude,
+  QueueLocation(tcsSuccess, C.latitude, C.longitude,
     Location.horizontalAccuracy, Location.altitude, Location.speed, D, '');
 end;
 
@@ -54,7 +87,7 @@ end;
 procedure TLocationDelegate.locationManager_didFailWithError(AManager: CLLocationManager;
   Error: NSError);
 begin
-  Tina4LocationDeliver(tcsFailed, 0, 0, 0, 0, 0, 0,
+  QueueLocation(tcsFailed, 0, 0, 0, 0, 0, 0,
     string(Error.localizedDescription.UTF8String));
 end;
 
@@ -68,7 +101,7 @@ procedure TLocationDelegate.locationManager_didChangeAuthorizationStatus(AManage
   Status: CLAuthorizationStatus);
 begin
   if Status = kCLAuthorizationStatusDenied then
-    Tina4LocationDeliver(tcsPermissionDenied, 0, 0, 0, 0, 0, 0, 'location permission denied')
+    QueueLocation(tcsPermissionDenied, 0, 0, 0, 0, 0, 0, 'location permission denied')
   else if (Status = kCLAuthorizationStatusAuthorized) and Requesting then
     AManager.startUpdatingLocation;
 end;
@@ -94,7 +127,7 @@ begin
   if S = kCLAuthorizationStatusNotDetermined then M.requestWhenInUseAuthorization
   else if S = kCLAuthorizationStatusAuthorized then M.startUpdatingLocation
   else if S = kCLAuthorizationStatusDenied then
-    Tina4LocationDeliver(tcsPermissionDenied, 0, 0, 0, 0, 0, 0, 'location permission denied');
+    QueueLocation(tcsPermissionDenied, 0, 0, 0, 0, 0, 0, 'location permission denied');
   Result := tcsStarted;
 end;
 

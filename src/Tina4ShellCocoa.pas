@@ -1846,6 +1846,7 @@ end;
 
 procedure TTina4Ticker.tick(t: NSTimer);
 begin
+  CheckSynchronize(0);
   if (shell <> nil) and Assigned(shell.OnTick) then
     shell.OnTick;
 end;
