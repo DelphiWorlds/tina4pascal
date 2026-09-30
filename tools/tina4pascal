@@ -1558,7 +1558,7 @@ cmd_deploy() {
 ios_udid() {
   [ -n "${IOS_UDID:-}" ] && { echo "$IOS_UDID"; return; }
   id="$(xcrun devicectl list devices 2>/dev/null \
-        | grep -iE 'available' | grep -iE 'iphone|ipad' \
+        | grep -iE 'available|connected' | grep -iE 'iphone|ipad' \
         | grep -oE '[0-9A-Fa-f]{8}-([0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}' | head -1)"
   [ -n "$id" ] && { echo "$id"; return; }
   idevice_id -l 2>/dev/null | head -1
