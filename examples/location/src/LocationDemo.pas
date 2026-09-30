@@ -9,7 +9,7 @@ procedure RegisterLocationDemo;
 implementation
 
 uses SysUtils, Tina4Capabilities, Tina4Events, Tina4HTMLDom, Tina4Builtins,
-  Tina4Location;
+  Tina4Interact, Tina4Location;
 
 var
   LocationUpdateCount: Integer = 0;
@@ -19,6 +19,7 @@ var T: THTMLTag;
 begin
   T := FindById(BuiltinsRoot, 'status');
   if T <> nil then SetElementText(T, S);
+  TinaInvalidateLayout;
   BuiltinsDirty := True;
 end;
 
