@@ -13,12 +13,16 @@ uses SysUtils, Tina4Capabilities, Tina4Events, Tina4HTMLDom, Tina4Builtins,
 
 var
   LocationUpdateCount: Integer = 0;
+  StatusHistory: string = 'Ready.';
 
 procedure SetStatus(const S: string);
 var T: THTMLTag;
 begin
   T := FindById(BuiltinsRoot, 'status');
-  if T <> nil then SetElementText(T, S);
+  StatusHistory := S + #10#10 + StatusHistory;
+  if Length(StatusHistory) > 16000 then
+    Delete(StatusHistory, 16001, Length(StatusHistory));
+  if T <> nil then SetElementText(T, StatusHistory);
   TinaInvalidateLayout;
   BuiltinsDirty := True;
 end;
@@ -29,7 +33,8 @@ begin
   if Status = tcsSuccess then
   begin
     Inc(LocationUpdateCount);
-    SetStatus(Format('Location update #%d\nLatitude: %.6f\nLongitude: %.6f\nAccuracy: %.1f m',
+    SetStatus(Format('Location update #%d' + #10 + 'Latitude: %.6f' + #10 +
+      'Longitude: %.6f' + #10 + 'Accuracy: %.1f m',
       [LocationUpdateCount, Location.Latitude, Location.Longitude, Location.Accuracy]));
   end
   else if Error <> '' then
