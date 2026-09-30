@@ -62,7 +62,10 @@ begin
   Q.Location.Accuracy := Accuracy; Q.Location.Altitude := Altitude;
   Q.Location.Speed := Speed; Q.Location.Timestamp := Timestamp;
   Q.Error := Error;
-  TThread.Queue(nil, Q.Deliver);
+  // Core Location invokes the delegate away from the Cocoa UI thread on
+  // macOS. Synchronize the DOM callback before returning so the host cannot
+  // render concurrently with the Pascal document tree.
+  TThread.Synchronize(nil, Q.Deliver);
 end;
 
 procedure DeliverLocation(Location: CLLocation);
