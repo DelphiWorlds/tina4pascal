@@ -11,6 +11,7 @@ import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
+import android.hardware.camera2.CameraMetadata;
 import android.hardware.camera2.CaptureRequest;
 import android.media.Image;
 import android.media.ImageReader;
@@ -18,6 +19,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.SystemClock;
+import android.util.Log;
 import android.view.Surface;
 import android.view.TextureView;
 
@@ -56,7 +58,10 @@ public class Tina4Scanner implements TextureView.SurfaceTextureListener {
     private volatile boolean torch = false;
     private volatile boolean opening = false;
     private long lastAt = 0;
+    private long lastAf = 0;                        // last continuous-AF restart
+    private int frameSeen = 0, frameDecoded = 0;   // diagnostics (see logcat TAG below)
 
+    private static final String TAG = "Tina4Scanner";
     private static final int PREV_W = 1280, PREV_H = 720;
 
     Tina4Scanner(Context ctx, String formats, Callback cb) {
@@ -176,12 +181,24 @@ public class Tina4Scanner implements TextureView.SurfaceTextureListener {
     private final CameraCaptureSession.StateCallback sessionCb = new CameraCaptureSession.StateCallback() {
         @Override public void onConfigured(CameraCaptureSession s) {
             session = s;
+            Log.i(TAG, "session configured; torch=" + torch);
             try {
+                // Full 3A on: some HALs only engage continuous autofocus when CONTROL_MODE
+                // is explicitly AUTO (a fixed-focus/blurry preview otherwise never decodes).
+                req.set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO);
                 req.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
+                req.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
+                // Apply the requested torch state now the session exists — setTorch()
+                // may have run during layout before the camera was open (session==null),
+                // so the initial repeating request must honour the `torch` field itself.
+                req.set(CaptureRequest.FLASH_MODE,
+                        torch ? CaptureRequest.FLASH_MODE_TORCH : CaptureRequest.FLASH_MODE_OFF);
                 s.setRepeatingRequest(req.build(), null, bgHandler);
             } catch (Exception e) { /* ignore */ }
         }
-        @Override public void onConfigureFailed(CameraCaptureSession s) {}
+        @Override public void onConfigureFailed(CameraCaptureSession s) {
+            Log.w(TAG, "session configure FAILED");
+        }
     };
 
     private final ImageReader.OnImageAvailableListener onFrame = new ImageReader.OnImageAvailableListener() {
@@ -196,6 +213,25 @@ public class Tina4Scanner implements TextureView.SurfaceTextureListener {
                 ByteBuffer yb = yp.getBuffer();
                 byte[] data = new byte[yb.remaining()];
                 yb.get(data);
+                if (frameSeen++ % 30 == 0)
+                    Log.i(TAG, "frame #" + frameSeen + " " + w + "x" + h
+                            + " stride=" + rowStride + " len=" + data.length
+                            + " decoded=" + frameDecoded);
+                // Keep continuous autofocus actively re-scanning: on many devices CAF
+                // settles then sits idle on a low-contrast/close barcode. A periodic
+                // AF_TRIGGER_CANCEL restarts the CAF sweep (unlike TRIGGER_START, which
+                // would LOCK focus). ~1.2s cadence so a moved barcode re-focuses fast.
+                long afNow = SystemClock.uptimeMillis();
+                if (session != null && req != null && afNow - lastAf > 1200) {
+                    lastAf = afNow;
+                    try {
+                        req.set(CaptureRequest.CONTROL_AF_TRIGGER,
+                                CameraMetadata.CONTROL_AF_TRIGGER_CANCEL);
+                        session.capture(req.build(), null, bgHandler);
+                        req.set(CaptureRequest.CONTROL_AF_TRIGGER,
+                                CameraMetadata.CONTROL_AF_TRIGGER_IDLE);
+                    } catch (Exception ignore) { /* AF not controllable */ }
+                }
 
                 // The camera sensor delivers landscape frames; a phone held in
                 // portrait sees 1D barcodes with their bars running VERTICALLY in
@@ -208,6 +244,10 @@ public class Tina4Scanner implements TextureView.SurfaceTextureListener {
                     res = decode(t, h, h, w);   // transposed: rowStride = new width = h
                 }
                 long now = SystemClock.uptimeMillis();
+                if (res != null && res.getText() != null) {
+                    frameDecoded++;
+                    Log.i(TAG, "DECODED " + res.getBarcodeFormat() + " = " + res.getText());
+                }
                 if (res != null && res.getText() != null && now - lastAt > 1500) {
                     lastAt = now;
                     // Hop to the UI thread. A NAMED Runnable, not an anonymous one
