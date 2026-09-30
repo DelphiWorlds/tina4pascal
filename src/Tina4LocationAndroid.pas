@@ -50,7 +50,8 @@ end;
 
 function AndroidBackground: TTina4CapabilityStatus;
 begin
-  Result := tcsUnsupported;
+  if AndroidLocationCall('startBackground', '()V') then Result := tcsStarted
+  else Result := tcsUnavailable;
 end;
 
 procedure InstallAndroidLocation(VM: PJavaVM);

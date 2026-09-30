@@ -194,7 +194,7 @@ request/completion bridge without introducing a third-party SDK.
 |---|---|---|---|---|
 | AdMob | planned native SDK bridge | planned Google SDK bridge | documented placeholder | Assessment |
 | Location foreground | planned Core Location bridge | planned platform provider bridge | planned placeholder/WinRT later | Assessment |
-| Location background | ✅ opt-in Core Location updates | separate milestone/foreground service | placeholder | Implemented on iOS |
+| Location background | ✅ opt-in Core Location updates | ✅ platform foreground service | placeholder | iOS + Android implemented |
 | ShareItems | ✅ activity controller bridge | ✅ chooser + private content provider | ✅ explicit unsupported adapter | Implemented; iOS archive/syntax verified |
 | Location foreground | ✅ Core Location bridge | ✅ platform `LocationManager` bridge | ❌ | iOS + macOS + Android adapters implemented; Windows remains |
 

@@ -4,6 +4,7 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.content.Intent;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
@@ -19,6 +20,7 @@ public final class Tina4Location {
     private static LocationListener listener;
     private static Tina4View view;
     private static boolean requesting;
+    private static boolean backgroundPending;
 
     private Tina4Location() {}
 
@@ -37,6 +39,16 @@ public final class Tina4Location {
     public static void init(Activity a) {
         activity = a;
         manager = (LocationManager) a.getSystemService(Context.LOCATION_SERVICE);
+        ensureListener();
+    }
+
+    static void initForService(Context c) {
+        manager = (LocationManager) c.getSystemService(Context.LOCATION_SERVICE);
+        ensureListener();
+    }
+
+    private static void ensureListener() {
+        if (listener != null) return;
         listener = new LocationListener() {
             @Override public void onLocationChanged(Location l) {
                 deliver(0, l.getLatitude(), l.getLongitude(),
@@ -85,6 +97,9 @@ public final class Tina4Location {
         if (!allowed) {
             deliver(4, 0, 0, 0, 0, 0, 0,
                 "location permission denied");
+        } else if (backgroundPending) {
+            backgroundPending = false;
+            startBackgroundService();
         } else if (requesting) {
             startUpdates();
         }
@@ -94,6 +109,27 @@ public final class Tina4Location {
         requesting = true;
         if (!granted()) { ask(); return; }
         startUpdates();
+    }
+
+    public static void startBackground() {
+        requesting = true;
+        if (!granted()) { backgroundPending = true; ask(); return; }
+        startBackgroundService();
+    }
+
+    private static void startBackgroundService() {
+        if (activity == null) return;
+        Intent intent = new Intent(activity, Tina4LocationService.class);
+        if (android.os.Build.VERSION.SDK_INT >= 26)
+            activity.startForegroundService(intent);
+        else
+            activity.startService(intent);
+    }
+
+    static void startFromService() { startUpdates(); }
+
+    static void stopFromService() {
+        if (manager != null && listener != null) manager.removeUpdates(listener);
     }
 
     private static void startUpdates() {
@@ -122,6 +158,9 @@ public final class Tina4Location {
 
     public static void stop() {
         requesting = false;
+        backgroundPending = false;
         if (manager != null && listener != null) manager.removeUpdates(listener);
+        if (activity != null)
+            activity.stopService(new Intent(activity, Tina4LocationService.class));
     }
 }
