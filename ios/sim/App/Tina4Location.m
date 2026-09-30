@@ -4,6 +4,11 @@ extern void tina4_location_result(int status, double latitude, double longitude,
                                   double accuracy, double altitude, double speed,
                                   double timestamp, const char *error);
 
+static void Tina4LocationNotifyView(void) {
+    [[NSNotificationCenter defaultCenter]
+        postNotificationName:@"Tina4LocationReady" object:nil];
+}
+
 @interface Tina4LocationDelegate : NSObject <CLLocationManagerDelegate>
 @property(nonatomic, strong) CLLocationManager *manager;
 @property(nonatomic, assign) BOOL requesting;
@@ -12,9 +17,10 @@ extern void tina4_location_result(int status, double latitude, double longitude,
 @implementation Tina4LocationDelegate
 - (void)locationManagerDidChangeAuthorization:(CLLocationManager *)manager {
     CLAuthorizationStatus status = manager.authorizationStatus;
-    if (status == kCLAuthorizationStatusDenied || status == kCLAuthorizationStatusRestricted)
+    if (status == kCLAuthorizationStatusDenied || status == kCLAuthorizationStatusRestricted) {
         tina4_location_result(4, 0, 0, 0, 0, 0, 0, "location permission denied");
-    else if (status == kCLAuthorizationStatusAuthorizedWhenInUse ||
+        Tina4LocationNotifyView();
+    } else if (status == kCLAuthorizationStatusAuthorizedWhenInUse ||
              status == kCLAuthorizationStatusAuthorizedAlways)
         if (self.requesting) [manager startUpdatingLocation];
 }
@@ -24,6 +30,7 @@ extern void tina4_location_result(int status, double latitude, double longitude,
     tina4_location_result(0, location.coordinate.latitude, location.coordinate.longitude,
                           location.horizontalAccuracy, location.altitude, location.speed,
                           location.timestamp.timeIntervalSince1970, NULL);
+    Tina4LocationNotifyView();
 }
 - (void)locationManager:(CLLocationManager *)manager didFailWithError:(NSError *)error {
     // Core Location reports kCLErrorLocationUnknown (code 0) transiently
@@ -32,6 +39,7 @@ extern void tina4_location_result(int status, double latitude, double longitude,
     if (error.code == kCLErrorLocationUnknown) return;
     int status = (error.code == kCLErrorDenied) ? 4 : 7;
     tina4_location_result(status, 0, 0, 0, 0, 0, 0, error.localizedDescription.UTF8String);
+    Tina4LocationNotifyView();
 }
 @end
 
@@ -63,6 +71,7 @@ void tina4_ios_location_start(void) {
         else if (manager.authorizationStatus == kCLAuthorizationStatusDenied ||
                  manager.authorizationStatus == kCLAuthorizationStatusRestricted)
             tina4_location_result(4, 0, 0, 0, 0, 0, 0, "location permission denied");
+            Tina4LocationNotifyView();
     });
 }
 void tina4_ios_location_stop(void) {
