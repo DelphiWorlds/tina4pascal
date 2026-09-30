@@ -248,6 +248,9 @@ request/completion bridge without introducing a third-party SDK.
   remain manual taps because the command-line harness has no touch injection.
 - [x] Preserve simulator DOM updates after taps; the host now repaints the live
   document instead of reloading the original HTML over action results.
+- [x] Keep iOS foreground location updates continuous and show an incrementing
+  update count in the Location demo; the Stop action is styled as an active
+  destructive control rather than appearing disabled.
 - [ ] Existing unrelated suite failures remain in `test_crypto`, `test_authflow`,
   `test_secrets`, and `test_ssoflow`; `test_share_items` is green.
 

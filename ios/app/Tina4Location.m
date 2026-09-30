@@ -28,7 +28,6 @@ extern void tina4_location_result(int status, double latitude, double longitude,
     tina4_location_result(0, location.coordinate.latitude, location.coordinate.longitude,
                           location.horizontalAccuracy, location.altitude,
                           location.speed, location.timestamp.timeIntervalSince1970, NULL);
-    self.requesting = NO;
 }
 
 - (void)locationManager:(CLLocationManager *)manager didFailWithError:(NSError *)error {
@@ -47,6 +46,7 @@ static Tina4LocationDelegate *Tina4LocationGet(void) {
         Tina4LocationShared.manager.delegate = Tina4LocationShared;
         Tina4LocationShared.manager.desiredAccuracy = kCLLocationAccuracyBest;
         Tina4LocationShared.manager.distanceFilter = kCLDistanceFilterNone;
+        Tina4LocationShared.manager.pausesLocationUpdatesAutomatically = NO;
     }
     return Tina4LocationShared;
 }

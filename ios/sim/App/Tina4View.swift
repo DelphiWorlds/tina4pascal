@@ -10,6 +10,7 @@ import SwiftUI
 final class Tina4View: UIView {
     private var started = false
     private var timer: Timer?
+    private var redrawTimer: Timer?
     private var imgObserver: NSObjectProtocol?     // retain the block observer, else it's torn down
     private var accentPink = false
 
@@ -48,6 +49,13 @@ final class Tina4View: UIView {
         if bundledHTML == nil {
             timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
                 self?.loadHTML(); self?.setNeedsDisplay()
+            }
+        } else {
+            // Native callbacks such as Core Location update the engine DOM
+            // asynchronously. Repaint the simulator host so those changes
+            // become visible without requiring another tap.
+            redrawTimer = Timer.scheduledTimer(withTimeInterval: 0.10, repeats: true) { [weak self] _ in
+                self?.setNeedsDisplay()
             }
         }
     }

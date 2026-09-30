@@ -11,6 +11,9 @@ implementation
 uses SysUtils, Tina4Capabilities, Tina4Events, Tina4HTMLDom, Tina4Builtins,
   Tina4Location;
 
+var
+  LocationUpdateCount: Integer = 0;
+
 procedure SetStatus(const S: string);
 var T: THTMLTag;
 begin
@@ -23,8 +26,11 @@ procedure LocationChanged(Status: TTina4CapabilityStatus;
   const Location: TTina4Location; const Error: string);
 begin
   if Status = tcsSuccess then
-    SetStatus(Format('Location update\nLatitude: %.6f\nLongitude: %.6f\nAccuracy: %.1f m',
-      [Location.Latitude, Location.Longitude, Location.Accuracy]))
+  begin
+    Inc(LocationUpdateCount);
+    SetStatus(Format('Location update #%d\nLatitude: %.6f\nLongitude: %.6f\nAccuracy: %.1f m',
+      [LocationUpdateCount, Location.Latitude, Location.Longitude, Location.Accuracy]));
+  end
   else if Error <> '' then
     SetStatus('Location: ' + Tina4CapabilityStatusName(Status) + ' — ' + Error)
   else
