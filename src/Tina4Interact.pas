@@ -887,6 +887,26 @@ begin
   end;
 end;
 
+{ Fill a `result="#id"` target with a decoded scan value. A form control renders
+  its `value` attribute (what the engine also reads back), so set that; any other
+  element takes the text as content. }
+procedure ApplyResultFill(const Sel, Val: string);
+var s: string; el: THTMLTag;
+begin
+  s := Trim(Sel);
+  if s = '' then Exit;
+  if (Length(s) > 0) and (s[1] = '#') then Delete(s, 1, 1);
+  if GParser = nil then Exit;
+  el := FindById(GParser.Root, s);
+  if el = nil then Exit;
+  if SameText(el.TagName, 'input') or SameText(el.TagName, 'textarea')
+     or SameText(el.TagName, 'select') then
+    SetAttr(el, 'value', Val)
+  else
+    SetElemText(el, Val);
+  GLayoutDirty := True;
+end;
+
 procedure ParseDoc(W: Single);
 var i: Integer; GImportSL: TStringList;
 begin
@@ -2393,7 +2413,7 @@ begin
 end;
 
 function TinaScanResult(Index: Integer; const Value, Format: string): Boolean;
-var sel: string; el: THTMLTag;
+var sel: string;
 begin
   Result := False;
   if (Index < 0) or (Index >= Length(GEmbeds)) then Exit;
@@ -2402,9 +2422,8 @@ begin
   sel := Trim(GEmbeds[Index].ResultSel);
   if sel <> '' then
   begin
-    if (Length(sel) > 0) and (sel[1] = '#') then Delete(sel, 1, 1);
-    el := FindById(GParser.Root, sel);
-    if el <> nil then begin SetElemText(el, Value); GLayoutDirty := True; Result := True; end;
+    ApplyResultFill(sel, Value);
+    Result := True;
   end;
   // fire the onscan action too, if any
   if GEmbeds[Index].OnScan <> '' then
