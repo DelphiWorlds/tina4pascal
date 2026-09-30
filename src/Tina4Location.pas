@@ -24,15 +24,18 @@ type
   TTina4LocationStartProc = function: TTina4CapabilityStatus;
   TTina4LocationStopProc = function: TTina4CapabilityStatus;
   TTina4LocationRequestProc = function: TTina4CapabilityStatus;
+  TTina4LocationBackgroundStartProc = function: TTina4CapabilityStatus;
 
 procedure Tina4SetLocationStart(P: TTina4LocationStartProc);
 procedure Tina4SetLocationStop(P: TTina4LocationStopProc);
 procedure Tina4SetLocationRequest(P: TTina4LocationRequestProc);
+procedure Tina4SetLocationBackgroundStart(P: TTina4LocationBackgroundStartProc);
 procedure Tina4SetLocationCallback(P: TTina4LocationCallback);
 
 function Tina4LocationStart: TTina4CapabilityStatus;
 function Tina4LocationStop: TTina4CapabilityStatus;
 function Tina4LocationRequest: TTina4CapabilityStatus;
+function Tina4LocationStartBackground: TTina4CapabilityStatus;
 procedure Tina4LocationDeliver(Status: TTina4CapabilityStatus;
   Latitude, Longitude, Accuracy, Altitude, Speed, Timestamp: Double;
   const Error: string);
@@ -43,11 +46,13 @@ var
   GStart: TTina4LocationStartProc = nil;
   GStop: TTina4LocationStopProc = nil;
   GRequest: TTina4LocationRequestProc = nil;
+  GBackgroundStart: TTina4LocationBackgroundStartProc = nil;
   GCallback: TTina4LocationCallback = nil;
 
 procedure Tina4SetLocationStart(P: TTina4LocationStartProc); begin GStart := P; end;
 procedure Tina4SetLocationStop(P: TTina4LocationStopProc); begin GStop := P; end;
 procedure Tina4SetLocationRequest(P: TTina4LocationRequestProc); begin GRequest := P; end;
+procedure Tina4SetLocationBackgroundStart(P: TTina4LocationBackgroundStartProc); begin GBackgroundStart := P; end;
 procedure Tina4SetLocationCallback(P: TTina4LocationCallback); begin GCallback := P; end;
 
 function Tina4LocationStart: TTina4CapabilityStatus;
@@ -66,6 +71,12 @@ function Tina4LocationRequest: TTina4CapabilityStatus;
 begin
   if not Assigned(GRequest) then Exit(tcsUnsupported);
   Result := GRequest;
+end;
+
+function Tina4LocationStartBackground: TTina4CapabilityStatus;
+begin
+  if not Assigned(GBackgroundStart) then Exit(tcsUnsupported);
+  Result := GBackgroundStart;
 end;
 
 procedure Tina4LocationDeliver(Status: TTina4CapabilityStatus;

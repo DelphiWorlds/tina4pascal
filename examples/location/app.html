@@ -7,9 +7,10 @@ p{color:#566573;line-height:1.4}button{display:block;width:100%;margin:10px 0;pa
 button.stop{background:#c0392b}#status{box-sizing:border-box;height:220px;overflow-y:auto;padding:12px;border-radius:8px;background:#f2f4f4;white-space:pre-wrap;font-family:monospace;font-size:14px;line-height:1.35}
 </style></head><body>
 <h1>Location demo</h1>
-<p>Foreground permission and Core Location updates.</p>
+<p>Foreground and optional background Core Location updates. Background updates require Always permission.</p>
 <button onclick="location.request()">Request permission</button>
 <button onclick="location.start()">Start updates</button>
+<button class="background" onclick="location.startBackground()">Start background updates</button>
 <button class="stop" onclick="location.stop()">Stop updates</button>
 <div id="status">Ready.</div>
 </body></html>

@@ -23,6 +23,9 @@ targets:
       properties:
         CFBundleDisplayName: Location Simulator
         NSLocationWhenInUseUsageDescription: Use your location while the app is in the foreground.
+        NSLocationAlwaysAndWhenInUseUsageDescription: Allow location access to continue updates while the app is in the background.
+        UIBackgroundModes:
+          - location
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait

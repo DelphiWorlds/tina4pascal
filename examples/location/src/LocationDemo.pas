@@ -58,12 +58,19 @@ begin
   SetStatus('Stop: ' + Tina4CapabilityStatusName(Tina4LocationStop));
 end;
 
+procedure StartBackgroundLocation(const Args: string);
+begin
+  SetStatus('Background start: ' +
+    Tina4CapabilityStatusName(Tina4LocationStartBackground));
+end;
+
 procedure RegisterLocationDemo;
 begin
   Tina4SetLocationCallback(@LocationChanged);
   RegisterAction('location.request', @RequestLocation);
   RegisterAction('location.start', @StartLocation);
   RegisterAction('location.stop', @StopLocation);
+  RegisterAction('location.startBackground', @StartBackgroundLocation);
 end;
 
 initialization

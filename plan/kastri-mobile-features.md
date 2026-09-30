@@ -194,7 +194,7 @@ request/completion bridge without introducing a third-party SDK.
 |---|---|---|---|---|
 | AdMob | planned native SDK bridge | planned Google SDK bridge | documented placeholder | Assessment |
 | Location foreground | planned Core Location bridge | planned platform provider bridge | planned placeholder/WinRT later | Assessment |
-| Location background | separate milestone | separate milestone/foreground service | placeholder | Assessment |
+| Location background | ✅ opt-in Core Location updates | separate milestone/foreground service | placeholder | Implemented on iOS |
 | ShareItems | ✅ activity controller bridge | ✅ chooser + private content provider | ✅ explicit unsupported adapter | Implemented; iOS archive/syntax verified |
 | Location foreground | ✅ Core Location bridge | ❌ | ❌ | iOS + macOS adapter implemented; Android/Windows remain |
 
@@ -251,6 +251,9 @@ request/completion bridge without introducing a third-party SDK.
 - [x] Keep iOS foreground location updates continuous and show an incrementing
   update count in the Location demo; the Stop action is styled as an active
   destructive control rather than appearing disabled.
+- [x] Add opt-in iOS background location: Always permission escalation, the
+  `location` background mode, and a shared `Tina4LocationStartBackground`
+  operation for the demo.
 - [ ] Existing unrelated suite failures remain in `test_crypto`, `test_authflow`,
   `test_secrets`, and `test_ssoflow`; `test_share_items` is green.
 
@@ -261,7 +264,8 @@ request/completion bridge without introducing a third-party SDK.
 - (working tree) `fix: use scene-aware iOS ShareItems presenter`
 - (working tree) `feat: add foreground Location contract and Apple adapters`
 
-## Status: ShareItems implementation complete; iOS unsigned project build verified
+## Status: ShareItems and iOS/macOS foreground Location complete; iOS background
+## Location bridge and demo control implemented; device validation pending
 
 ## References
 

@@ -12,6 +12,7 @@ static void Tina4LocationNotifyView(void) {
 @interface Tina4LocationDelegate : NSObject <CLLocationManagerDelegate>
 @property(nonatomic, strong) CLLocationManager *manager;
 @property(nonatomic, assign) BOOL requesting;
+@property(nonatomic, assign) BOOL backgroundRequested;
 @end
 
 @implementation Tina4LocationDelegate
@@ -22,7 +23,10 @@ static void Tina4LocationNotifyView(void) {
         Tina4LocationNotifyView();
     } else if (status == kCLAuthorizationStatusAuthorizedWhenInUse ||
              status == kCLAuthorizationStatusAuthorizedAlways)
-        if (self.requesting) [manager startUpdatingLocation];
+        if (self.requesting) {
+            manager.allowsBackgroundLocationUpdates = self.backgroundRequested;
+            [manager startUpdatingLocation];
+        }
 }
 - (void)locationManager:(CLLocationManager *)manager didUpdateLocations:(NSArray<CLLocation *> *)locations {
     CLLocation *location = locations.lastObject;
@@ -62,21 +66,46 @@ void tina4_ios_location_start(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
         Tina4LocationDelegate *delegate = Tina4LocationGet();
         delegate.requesting = YES;
+        delegate.backgroundRequested = NO;
         CLLocationManager *manager = delegate.manager;
+        manager.allowsBackgroundLocationUpdates = NO;
         if (manager.authorizationStatus == kCLAuthorizationStatusNotDetermined)
             [manager requestWhenInUseAuthorization];
         else if (manager.authorizationStatus == kCLAuthorizationStatusAuthorizedWhenInUse ||
                  manager.authorizationStatus == kCLAuthorizationStatusAuthorizedAlways)
             [manager startUpdatingLocation];
         else if (manager.authorizationStatus == kCLAuthorizationStatusDenied ||
-                 manager.authorizationStatus == kCLAuthorizationStatusRestricted)
+                 manager.authorizationStatus == kCLAuthorizationStatusRestricted) {
             tina4_location_result(4, 0, 0, 0, 0, 0, 0, "location permission denied");
             Tina4LocationNotifyView();
+        }
+    });
+}
+void tina4_ios_location_start_background(void) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        Tina4LocationDelegate *delegate = Tina4LocationGet();
+        delegate.requesting = YES;
+        delegate.backgroundRequested = YES;
+        CLLocationManager *manager = delegate.manager;
+        manager.allowsBackgroundLocationUpdates = YES;
+        if (manager.authorizationStatus == kCLAuthorizationStatusNotDetermined ||
+            manager.authorizationStatus == kCLAuthorizationStatusAuthorizedWhenInUse)
+            [manager requestAlwaysAuthorization];
+        else if (manager.authorizationStatus == kCLAuthorizationStatusAuthorizedAlways)
+            [manager startUpdatingLocation];
+        else if (manager.authorizationStatus == kCLAuthorizationStatusDenied ||
+                 manager.authorizationStatus == kCLAuthorizationStatusRestricted) {
+            tina4_location_result(4, 0, 0, 0, 0, 0, 0, "location permission denied");
+            Tina4LocationNotifyView();
+        }
     });
 }
 void tina4_ios_location_stop(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
         Tina4LocationDelegate *delegate = Tina4LocationGet();
-        delegate.requesting = NO; [delegate.manager stopUpdatingLocation];
+        delegate.requesting = NO;
+        delegate.backgroundRequested = NO;
+        delegate.manager.allowsBackgroundLocationUpdates = NO;
+        [delegate.manager stopUpdatingLocation];
     });
 }
