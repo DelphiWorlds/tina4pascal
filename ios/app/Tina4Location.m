@@ -31,7 +31,11 @@ extern void tina4_location_result(int status, double latitude, double longitude,
 }
 
 - (void)locationManager:(CLLocationManager *)manager didFailWithError:(NSError *)error {
-    int status = (error.code == kCLErrorDenied) ? 4 : 6;
+    // Core Location reports kCLErrorLocationUnknown (code 0) transiently
+    // while the simulator/device is acquiring or switching coordinates. It
+    // is not a terminal failure and should not reach the application log.
+    if (error.code == kCLErrorLocationUnknown) return;
+    int status = (error.code == kCLErrorDenied) ? 4 : 7;
     tina4_location_result(status, 0, 0, 0, 0, 0, 0, error.localizedDescription.UTF8String);
 }
 
