@@ -63,9 +63,9 @@ begin
   Q.Location.Speed := Speed; Q.Location.Timestamp := Timestamp;
   Q.Error := Error;
   // Core Location invokes the delegate away from the Cocoa UI thread on
-  // macOS. Synchronize the DOM callback before returning so the host cannot
-  // render concurrently with the Pascal document tree.
-  TThread.Synchronize(nil, Q.Deliver);
+  // macOS. Force the DOM callback onto the Cocoa ticker's main-thread pump;
+  // do not block the Location Services callback thread.
+  TThread.ForceQueue(nil, Q.Deliver);
 end;
 
 procedure DeliverLocation(Location: CLLocation);
