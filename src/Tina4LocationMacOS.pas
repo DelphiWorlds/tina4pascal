@@ -6,7 +6,7 @@ unit Tina4LocationMacOS;
 interface
 
 procedure InstallMacOSLocation;
-procedure Tina4LocationMacOSPump;
+function Tina4LocationMacOSPump: Boolean;
 
 implementation
 
@@ -32,6 +32,7 @@ type
   end;
 
 var GDelegate: TLocationDelegate = nil;
+var GLocationNeedsPaint: Boolean = False;
 
 type
   TQueuedLocation = class
@@ -47,6 +48,7 @@ begin
     Tina4LocationDeliver(Status, Location.Latitude, Location.Longitude,
       Location.Accuracy, Location.Altitude, Location.Speed, Location.Timestamp,
       Error);
+    GLocationNeedsPaint := True;
   finally
     Free;
   end;
@@ -146,9 +148,11 @@ begin
   EnsureManager.requestWhenInUseAuthorization; Result := tcsStarted;
 end;
 
-procedure Tina4LocationMacOSPump;
+function Tina4LocationMacOSPump: Boolean;
 begin
   CheckSynchronize(0);
+  Result := GLocationNeedsPaint;
+  GLocationNeedsPaint := False;
 end;
 
 procedure InstallMacOSLocation;
