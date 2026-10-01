@@ -1,0 +1,35 @@
+<body onscroll="plx.scroll()" style="margin:0;font-family:sans-serif;background:#0b1020">
+  <!-- scroll-progress bar (fixed, driven by onscroll) -->
+  <div style="position:fixed;top:0;left:0;height:5px;width:100%;background:#1e293b;z-index:5">
+    <div id="bar" style="height:5px;width:0;background:linear-gradient(90deg,#ec4899,#8b5cf6)"></div>
+  </div>
+
+  <!-- TECHNIQUE 1: fixed gradient backdrop — holds still under scroll -->
+  <div style="position:fixed;top:0;left:0;width:900px;height:640px;background:radial-gradient(circle at 50% 28%,#243049,#0b1020);z-index:0"></div>
+
+  <!-- TECHNIQUE 3: onscroll-driven hero — the logo drifts at half the scroll rate -->
+  <div style="position:relative;z-index:1;height:520px;overflow:hidden">
+    <img id="logo" src="assets/tina4pascal-logo.png" style="position:absolute;top:70px;left:50%;margin-left:-320px;width:640px">
+    <div id="cap" style="position:absolute;top:452px;left:0;width:100%;text-align:center;color:#8aa0bd;font-size:13px;letter-spacing:3px;text-transform:uppercase">scroll ↓ the logo drifts</div>
+  </div>
+
+  <!-- scrolling content over the fixed backdrop -->
+  <div style="position:relative;z-index:1;background:#0b1020;padding:36px 24px 80px">
+    <div style="max-width:620px;margin:0 auto">
+      <div style="background:#111735;border:1px solid #1e293b;border-radius:16px;padding:28px;margin-bottom:20px;color:#e2e8f0">
+        <div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#ec4899">Parallax · three ways</div>
+        <h1 style="margin:8px 0">Fixed · onscroll · 3D</h1>
+        <p style="color:#94a3b8;margin:0">A fixed gradient backdrop, an onscroll-driven logo that rises slower than the page, and a CSS perspective card — all native, no WebView.</p>
+      </div>
+      <div style="background:#111735;border:1px solid #1e293b;border-radius:16px;padding:24px;margin-bottom:20px;color:#e2e8f0"><h2 style="margin:0 0 8px">onscroll</h2><p style="color:#94a3b8;margin:0">The engine dispatches onscroll with the scroll offset; src/AppLogic.pas moves each layer at its own rate.</p></div>
+
+      <!-- TECHNIQUE 2: perspective + translateZ depth card -->
+      <div style="perspective:420px;height:200px;margin:4px 0 20px">
+        <div style="transform:translateZ(-130px) rotateX(7deg);transform-style:preserve-3d;background:linear-gradient(135deg,#8b5cf6,#ec4899);border-radius:18px;height:170px;color:#fff;display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:bold">perspective + translateZ</div>
+      </div>
+
+      <div style="background:#111735;border:1px solid #1e293b;border-radius:16px;padding:24px;color:#e2e8f0"><h2 style="margin:0 0 8px">It's magic</h2><p style="color:#94a3b8;margin:0">Keep scrolling — the backdrop stays, the logo lags, the bar fills.</p></div>
+      <div style="height:260px"></div>
+    </div>
+  </div>
+</body>

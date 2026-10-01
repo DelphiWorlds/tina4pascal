@@ -152,6 +152,6 @@ the patterns being uniform, so hold the line on these:
 core/contract/shells) · `tools/tina4pascal` (the CLI: build/test/run/release) ·
 `tools/compare-all.sh` + `run-compliance.sh` + `run-raster-tests.sh` (verification) ·
 `docs/ARCHITECTURE.md`, `docs/CSS-PROPERTY-INDEX.md`, `docs/HTML-ELEMENT-INDEX.md` ·
-`examples/` (apps, incl. `apirequest`, `calculator`, `lavalamp`, `codearea`/`codeeditor`/`codeviewer`, `forms`/`list`/`chart`) ·
+`examples/` (apps, incl. `apirequest`, `calculator`, `lavalamp`, `codearea`/`codeeditor`/`codeviewer`, `forms`/`list`/`chart`, `parallax`) ·
 `src/Tina4Highlight.pas` (the pluggable syntax-highlighter registry behind `<codearea>`) ·
 `skills/tina4pascal-developer/` (the app/feature-building companion to this skill).

@@ -414,11 +414,14 @@ so a browser download may be quarantined — verify it, then
 - **Inline `<script type="text/pascal">`** — app behaviour in the page, extracted
   and **compiled** into the app at build (native, type-checked, no runtime VM), so a
   project can be a single `app.html`. ([ADR-0009](plan/adr/0009-inline-script-extract-compile.md))
-- **Engine** — text controls now dispatch `oninput` on every edit; controls honour
-  an explicitly-declared `background` (dark-themed forms no longer get the light UA
-  fill).
+- **Engine** — text controls now dispatch `oninput` on every edit; scroll dispatches
+  `onscroll` with the scroll offset (for scroll-linked parallax); controls honour an
+  explicitly-declared `background` (dark-themed forms no longer get the light UA fill);
+  flex wrap now distributes free cross-space (`align-content:stretch`), and a
+  use-after-free on dynamic flex rebuilds is fixed.
 - **Examples** — `codearea`, `codeeditor`, `codeviewer`, `inline`, `forms`
-  (validation), `list` (a live data table), `chart` (a bar chart).
+  (validation), `list` (a live data table), `chart` (a bar chart), `parallax`
+  (fixed + onscroll + 3D perspective).
 
 ### v1.1.0
 

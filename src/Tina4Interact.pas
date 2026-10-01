@@ -336,6 +336,32 @@ begin
   Tina4CaretVisible := True;
 end;
 
+{ The first element (depth-first) carrying an onscroll handler, else nil — the page
+  scroller's handler, usually on <body>. Cached per scroll gesture is unnecessary;
+  the tree is small and scrolls are coarse. }
+function FindOnScrollTag(Node: THTMLTag): THTMLTag;
+var c, r: THTMLTag;
+begin
+  Result := nil;
+  if Node = nil then Exit;
+  if Node.HasAttribute('onscroll') then Exit(Node);
+  for c in Node.Children do begin r := FindOnScrollTag(c); if r <> nil then Exit(r); end;
+end;
+
+{ Fire an element's onscroll handler, passing the current scroll offset (CSS px) as
+  the argument so the handler can drive scroll-linked parallax. Mirrors the oninput
+  contract added for live fields: a DOM mutation in the handler relayouts next frame. }
+procedure FireOnScroll(Tag: THTMLTag; ScrollPx: Single);
+var h, nm: string; p: Integer;
+begin
+  if (Tag = nil) or not Tag.HasAttribute('onscroll') then Exit;
+  h := Tag.GetAttribute('onscroll');
+  p := Pos('(', h);
+  if p > 0 then nm := Trim(Copy(h, 1, p - 1)) else nm := Trim(h);
+  DispatchActionArgs(nm, IntToStr(Round(ScrollPx)));
+  if BuiltinsDirty then begin BuiltinsDirty := False; GLayoutDirty := True; end;
+end;
+
 { Control kind of a tag, but ckNone for anything that is NOT a form-control
   element. (Tina4HTMLLayout.ControlKindOf assumes it is only ever called on a
   real control and falls back to ckTextInput otherwise — so a bare tap on a
@@ -1939,10 +1965,12 @@ begin
              GDragBox.ScrollLeft := Max(0, Min(GDragBox.MaxScrollX, GDragBox.ScrollLeft - dx));
            if GDragBox.Scrollable and (GDragBox.MaxScroll > 0) then
              GDragBox.ScrollTop := Max(0, Min(GDragBox.MaxScroll, GDragBox.ScrollTop - dy));
+           FireOnScroll(GDragBox.Tag, GDragBox.ScrollTop);
          end
          else
          begin
            GScrollY := GScrollY - dy; ClampScroll;
+           FireOnScroll(FindOnScrollTag(GParser.Root), GScrollY);
          end;
        end;
     1: begin
@@ -2070,11 +2098,13 @@ begin
       sb.ScrollLeft := Max(0, Min(sb.MaxScrollX, sb.ScrollLeft - DX));
     if sb.Scrollable and (sb.MaxScroll > 0) then
       sb.ScrollTop := Max(0, Min(sb.MaxScroll, sb.ScrollTop - DY));
+    FireOnScroll(sb.Tag, sb.ScrollTop);
   end
   else
   begin
     GScrollY := GScrollY - DY;
     ClampScroll;
+    FireOnScroll(FindOnScrollTag(GParser.Root), GScrollY);
   end;
 end;
 

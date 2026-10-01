@@ -1,0 +1,6 @@
+{
+  "name": "Parallax",
+  "bundleId": "com.tina4.parallax",
+  "main": "main.pas",
+  "appUnits": ["AppLogic"]
+}

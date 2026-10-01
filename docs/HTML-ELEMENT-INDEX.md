@@ -169,9 +169,10 @@ wishlist.
 
 **Core-renderable, still open:** none — the element inventory is complete. A
 minimal event hook (`Tina4Builtins`: `dialog.show/showModal/close`,
-`output.recalc` + a tiny arithmetic evaluator, dispatched from plain `onclick`/
-`oninput` via `Tina4Events`) unblocked the last two (`<output>`, `<dialog>`
-modal) without a JS engine. There is still no runtime scripting engine by design;
+`output.recalc` + a tiny arithmetic evaluator, dispatched from plain `onclick` /
+`oninput` / `onscroll` via `Tina4Events`) unblocked the last two (`<output>`, `<dialog>`
+modal) without a JS engine. `onscroll` fires with the scroll offset (px) as its arg,
+for scroll-linked parallax (see `examples/parallax`). There is still no runtime scripting engine by design;
 for app logic in the page, `<script type="text/pascal">` is extracted and **compiled**
 at build (ADR-0009), so behaviour is native Pascal, not interpreted.
 
