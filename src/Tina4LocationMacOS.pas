@@ -6,6 +6,7 @@ unit Tina4LocationMacOS;
 interface
 
 procedure InstallMacOSLocation;
+procedure Tina4LocationMacOSPump;
 
 implementation
 
@@ -143,6 +144,11 @@ end;
 function MacRequest: TTina4CapabilityStatus;
 begin
   EnsureManager.requestWhenInUseAuthorization; Result := tcsStarted;
+end;
+
+procedure Tina4LocationMacOSPump;
+begin
+  CheckSynchronize(0);
 end;
 
 procedure InstallMacOSLocation;

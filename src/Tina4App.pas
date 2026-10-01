@@ -37,7 +37,7 @@ uses
   ctypes, Tina4RenderBackend, Tina4ShellLinux, Tina4Interact;
 {$ENDIF}
 {$IFDEF DARWIN}
-  Tina4RenderBackend, Tina4ShellCocoa, Tina4Interact;
+  Tina4RenderBackend, Tina4ShellCocoa, Tina4Interact, Tina4LocationMacOS;
 {$ENDIF}
 
 { Render the requested template into the engine's DOM. TinaRenderTemplate takes
@@ -533,18 +533,21 @@ procedure TAppDriver.Scroll(X, Y, DX, DY: Single); begin TinaScrollBy(X, Y, DX, 
 procedure TAppDriver.Tick;
 var nowMs: QWord; thresh: Integer;
 begin
-  // TinaTick advances the animation clock by real elapsed time (and drives momentum),
-  // so call it every tick; it returns 1 while a repaint is wanted. But PACE the actual
-  // repaint adaptively: a cheap frame repaints at the full ~60fps ticker, while an
-  // expensive one (a per-frame CSS filter or a canvas full of soft fills) would peg a
-  // core — so leave ~2.5x the last paint time idle between frames, capping the duty
-  // cycle to ~40% and letting the animation settle at a sane fps instead of melting.
+{$IFDEF DARWIN}
+  if Tina4LocationMacOSPump then Shell.Invalidate;
+{$ENDIF}
+  // TinaTick advances the animation clock by real elapsed time and drives momentum.
+  // Pace actual repaints adaptively to avoid overloading the CPU.
   if TinaTick = 1 then
   begin
     nowMs := GetTickCount64;
-    thresh := Round(LastPaintMs * 2.5); if thresh < 16 then thresh := 16;
+    thresh := Round(LastPaintMs * 2.5);
+    if thresh < 16 then thresh := 16;
     if nowMs - LastRepaint >= QWord(thresh) then
-    begin LastRepaint := nowMs; Shell.Invalidate; end;
+    begin
+      LastRepaint := nowMs;
+      Shell.Invalidate;
+    end;
   end;
 end;
 
