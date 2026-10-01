@@ -497,6 +497,8 @@ end;
 type
   TAppDriver = class
     Shell: TCocoaShell;
+    LastPaintMs: Integer;   // wall time the last frame took
+    LastRepaint: QWord;     // when we last posted an animation repaint
     procedure Paint(Canvas: TTina4Canvas; W, H: Single);
     procedure Down(X, Y: Single);
     procedure Up(X, Y: Single);
@@ -517,13 +519,34 @@ procedure MacRenderFrame; begin TinaFrame(GMacW, GMacH, 1.0); end;
 procedure MacSaveFrame(const Path: string); begin GShell.Snapshot(Path); end;
 
 procedure TAppDriver.Paint(Canvas: TTina4Canvas; W, H: Single);
-begin TinaFrame(Round(W), Round(H), 1.0); end;
+var t0: QWord;
+begin
+  t0 := GetTickCount64;
+  TinaFrame(Round(W), Round(H), 1.0);
+  LastPaintMs := Integer(GetTickCount64 - t0);   // drives adaptive anim pacing in Tick
+end;
 procedure TAppDriver.Down(X, Y: Single); begin TinaTouch(0, X, Y); Shell.Invalidate; end;
 procedure TAppDriver.Up(X, Y: Single);   begin TinaTouch(1, X, Y); Shell.Invalidate; end;
 procedure TAppDriver.Move(X, Y: Single); begin TinaHover(X, Y); end;
 procedure TAppDriver.Drag(X, Y: Single); begin TinaTouch(2, X, Y); Shell.Invalidate; end;
 procedure TAppDriver.Scroll(X, Y, DX, DY: Single); begin TinaScrollBy(X, Y, DX, DY); Shell.Invalidate; end;
-procedure TAppDriver.Tick; begin if TinaTick = 1 then Shell.Invalidate; end;
+procedure TAppDriver.Tick;
+var nowMs: QWord; thresh: Integer;
+begin
+  // TinaTick advances the animation clock by real elapsed time (and drives momentum),
+  // so call it every tick; it returns 1 while a repaint is wanted. But PACE the actual
+  // repaint adaptively: a cheap frame repaints at the full ~60fps ticker, while an
+  // expensive one (a per-frame CSS filter or a canvas full of soft fills) would peg a
+  // core — so leave ~2.5x the last paint time idle between frames, capping the duty
+  // cycle to ~40% and letting the animation settle at a sane fps instead of melting.
+  if TinaTick = 1 then
+  begin
+    nowMs := GetTickCount64;
+    thresh := Round(LastPaintMs * 2.5); if thresh < 16 then thresh := 16;
+    if nowMs - LastRepaint >= QWord(thresh) then
+    begin LastRepaint := nowMs; Shell.Invalidate; end;
+  end;
+end;
 
 procedure RunApp(const Title, TemplateDir, Template, JsonContext, IconPath: string; W, H: Integer);
 var snap, dk, dout: string; aw, ah: Integer; overlay: Boolean; ix, iy: Single;

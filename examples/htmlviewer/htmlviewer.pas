@@ -124,6 +124,8 @@ type
     HoverOpt: Integer;            // hovered option row in the open dropdown, -1 none
     Script: TStringList;          // --script: one driver command per tick
     ScriptPos: Integer;
+    LastPaintMs: Integer;         // wall time the last frame's paint took
+    LastAnimTick: QWord;          // when we last advanced+repainted an animation
     procedure Paint(Canvas: TTina4Canvas; W, H: Single);
     procedure Scroll(X, Y, DX, DY: Single);
     procedure MouseDown(X, Y: Single);
@@ -583,7 +585,9 @@ var
   sb: TLayoutBox;
   opt: THTMLTag;
   txt, cur: string;
+  paintT0: QWord;
 begin
+  paintT0 := GetTickCount64;
   ViewH := H;
   // snapshot testing: TINA4_ANIM_CLOCK forces the animation clock to a fixed time
   if GetEnvironmentVariable('TINA4_ANIM_CLOCK') <> '' then
@@ -656,6 +660,7 @@ begin
     thumbY := (ScrollY / maxScroll) * (H - thumbH);
     Canvas.FillRect(W - 8, thumbY, 6, thumbH, $60000000);
   end;
+  LastPaintMs := Integer(GetTickCount64 - paintT0);   // drives adaptive anim pacing
 end;
 
 procedure TViewer.Scroll(X, Y, DX, DY: Single);
@@ -742,12 +747,31 @@ const
 var
   AudioProgFrac: Single;
   AudioProgPlaying: Boolean;
+  nowMs: QWord;
 begin
   // live data (SSE/WS): fire queued messages onto their DOM elements, relayout
   LiveDrain;
   if BuiltinsDirty then begin BuiltinsDirty := False; Rebuild; Shell.Invalidate; end;
-  // CSS animation / <lottie>: advance the shared clock + repaint while active
-  if AnimActive then begin AnimAdvance(1 / 60); Shell.Invalidate; end;
+  // CSS animation / <lottie>: advance the shared clock + repaint while active —
+  // but pace it ADAPTIVELY. A cheap frame (transform/opacity) repaints at the full
+  // ~60fps ticker; an expensive one (a CSS filter like the lava-lamp blur, which is
+  // recomputed every frame on this software renderer) would otherwise peg a core, so
+  // we leave ~2.5x the last paint time idle between frames — capping the duty cycle to
+  // ~40% of a core and letting the animation degrade to a sane frame rate instead of
+  // melting (a lava-lamp-style effect looks fine at the resulting lower fps).
+  // The clock advances by REAL elapsed time, so animation speed stays correct at any
+  // resulting rate.
+  if AnimActive then
+  begin
+    nowMs := GetTickCount64;
+    if nowMs - LastAnimTick >= QWord(Max(16, Round(LastPaintMs * 2.5))) then
+    begin
+      AnimAdvance((nowMs - LastAnimTick) / 1000.0);
+      LastAnimTick := nowMs;
+      Shell.Invalidate;
+    end;
+  end
+  else LastAnimTick := GetTickCount64;
   // <audio controls>: advance the played fraction from the shell player; when the
   // clip ends the shell reports Playing=False and the glyph resets to ▶.
   if AudioTag <> nil then
