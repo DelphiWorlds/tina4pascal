@@ -33,6 +33,9 @@ void tina4_set_file(const char *name);
 void tina4_set_photo(const char *path);
 void tina4_set_recording(const char *path);   // hand back the recorded audio ('' = failed)
 void tina4_ios_share_items(const char *json, const char *anchor);
+void tina4_ios_location_start(void);
+void tina4_ios_location_stop(void);
+void tina4_ios_location_request(void);
 
 // Engine-drawn <audio controls>: on a TINA_AUDIO_TOGGLE touch, read the source
 // URL + which way the tap toggled, drive an AVAudioPlayer, and push the elapsed

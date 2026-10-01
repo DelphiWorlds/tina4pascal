@@ -196,6 +196,7 @@ request/completion bridge without introducing a third-party SDK.
 | Location foreground | planned Core Location bridge | planned platform provider bridge | planned placeholder/WinRT later | Assessment |
 | Location background | separate milestone | separate milestone/foreground service | placeholder | Assessment |
 | ShareItems | ✅ activity controller bridge | ✅ chooser + private content provider | ✅ explicit unsupported adapter | Implemented; iOS archive/syntax verified |
+| Location foreground | ✅ Core Location bridge | ❌ | ❌ | iOS + macOS adapter implemented; Android/Windows remain |
 
 ## Tests (to be written before implementation)
 
@@ -212,6 +213,8 @@ request/completion bridge without introducing a third-party SDK.
 - Location: permission denied, provider disabled, one-shot success, update
   delivery, stop/cancel, malformed/native error callback, and process/lifecycle
   teardown.
+- [x] Portable Location contract test — 6 assertions pass; iOS/macOS native
+  adapters compile and the Location demo is staged for project builds.
 - AdMob: missing configuration, test configuration, consent denied, load error,
   successful banner/interstitial callback sequence, dismissal, and reward.
 - Native verification: Android APK packaging/manifest and iOS Xcode link/staged
@@ -248,6 +251,7 @@ request/completion bridge without introducing a third-party SDK.
 - (working tree) `feat: add capability contract and ShareItems adapters`
 - (working tree) `test: add ShareItems integration demo`
 - (working tree) `fix: use scene-aware iOS ShareItems presenter`
+- (working tree) `feat: add foreground Location contract and Apple adapters`
 
 ## Status: ShareItems implementation complete; iOS unsigned project build verified
 

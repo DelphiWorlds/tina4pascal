@@ -1,0 +1,7 @@
+{
+  "name": "Location Demo",
+  "title": "Tina4 Location Demo",
+  "bundleId": "com.delphiworlds.locationdemo",
+  "main": "main.pas",
+  "appUnits": ["LocationDemo"]
+}

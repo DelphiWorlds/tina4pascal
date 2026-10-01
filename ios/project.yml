@@ -41,3 +41,4 @@ targets:
       - sdk: ImageIO.framework
       - sdk: MobileCoreServices.framework
       - sdk: UserNotifications.framework   # local notifications (notify.show)
+      - sdk: CoreLocation.framework

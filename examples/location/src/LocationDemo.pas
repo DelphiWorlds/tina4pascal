@@ -1,0 +1,60 @@
+unit LocationDemo;
+
+{$mode delphi}{$H+}
+
+interface
+
+procedure RegisterLocationDemo;
+
+implementation
+
+uses SysUtils, Tina4Capabilities, Tina4Events, Tina4HTMLDom, Tina4Builtins,
+  Tina4Location;
+
+procedure SetStatus(const S: string);
+var T: THTMLTag;
+begin
+  T := FindById(BuiltinsRoot, 'status');
+  if T <> nil then SetElementText(T, S);
+  BuiltinsDirty := True;
+end;
+
+procedure LocationChanged(Status: TTina4CapabilityStatus;
+  const Location: TTina4Location; const Error: string);
+begin
+  if Status = tcsSuccess then
+    SetStatus(Format('Location update\nLatitude: %.6f\nLongitude: %.6f\nAccuracy: %.1f m',
+      [Location.Latitude, Location.Longitude, Location.Accuracy]))
+  else if Error <> '' then
+    SetStatus('Location: ' + Tina4CapabilityStatusName(Status) + ' — ' + Error)
+  else
+    SetStatus('Location: ' + Tina4CapabilityStatusName(Status));
+end;
+
+procedure RequestLocation(const Args: string);
+begin
+  SetStatus('Permission request: ' + Tina4CapabilityStatusName(Tina4LocationRequest));
+end;
+
+procedure StartLocation(const Args: string);
+begin
+  SetStatus('Start: ' + Tina4CapabilityStatusName(Tina4LocationStart));
+end;
+
+procedure StopLocation(const Args: string);
+begin
+  SetStatus('Stop: ' + Tina4CapabilityStatusName(Tina4LocationStop));
+end;
+
+procedure RegisterLocationDemo;
+begin
+  Tina4SetLocationCallback(@LocationChanged);
+  RegisterAction('location.request', @RequestLocation);
+  RegisterAction('location.start', @StartLocation);
+  RegisterAction('location.stop', @StopLocation);
+end;
+
+initialization
+  RegisterLocationDemo;
+
+end.

@@ -1215,7 +1215,7 @@ EOF
 cmd_test() {
   need_fpc
   fail=0
-  for t in dom highlight codearea flexrebuild qr svg picture services http docs frond pseudo media webp pdf scanner barcode crypto auth rbacui authflow secrets ssoflow shareitems; do
+  for t in dom highlight codearea flexrebuild qr svg picture services http docs frond pseudo media webp pdf scanner barcode crypto auth rbacui authflow secrets ssoflow share_items location; do
     [ -f "$ROOT/tests/test_$t.pas" ] || continue
     o="$BUILD/test/$t"; mkdir -p "$o"
     "$FPC" -Mdelphi -Fu"$SRC" -FE"$o" -FU"$o" "$ROOT/tests/test_$t.pas" >/dev/null 2>&1 \
@@ -1265,6 +1265,7 @@ cmd_macos() {
   <key>LSMinimumSystemVersion</key><string>10.13</string>
   <key>NSMicrophoneUsageDescription</key><string>Record audio from a &lt;recorder&gt; element.</string>
   <key>NSCameraUsageDescription</key><string>Capture photos and scan codes from &lt;camera&gt; / scanner elements.</string>
+  <key>NSLocationWhenInUseUsageDescription</key><string>Use your location while the app is in the foreground.</string>
 </dict></plist>
 PLIST
   ok "built ${B}$app${Z}"
