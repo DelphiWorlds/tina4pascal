@@ -1,0 +1,6 @@
+{
+  "name": "Chart",
+  "bundleId": "com.tina4.chart",
+  "main": "main.pas",
+  "appUnits": ["AppLogic"]
+}

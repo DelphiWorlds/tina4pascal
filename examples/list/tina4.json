@@ -1,0 +1,6 @@
+{
+  "name": "List",
+  "bundleId": "com.tina4.list",
+  "main": "main.pas",
+  "appUnits": ["AppLogic"]
+}

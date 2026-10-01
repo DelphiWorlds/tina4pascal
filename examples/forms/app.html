@@ -1,0 +1,23 @@
+<body style="margin:0;background:#f1f5f9;font-family:sans-serif;color:#0f172a">
+  <div style="max-width:440px;margin:0 auto;padding:40px 24px">
+    <h1 style="font-size:24px;margin:0 0 4px">Create account</h1>
+    <p style="color:#64748b;margin:0 0 24px">A form with inline validation — rules in src/FormLogic.pas</p>
+
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:24px">
+      <label style="display:block;font-size:13px;font-weight:bold;margin-bottom:6px">Name</label>
+      <input id="f-name" placeholder="Ada Lovelace" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid #cbd5e1;border-radius:8px;font-size:15px">
+      <small id="e-name" style="display:block;min-height:18px;font-size:12px;margin:4px 0 14px"></small>
+
+      <label style="display:block;font-size:13px;font-weight:bold;margin-bottom:6px">Email</label>
+      <input id="f-email" placeholder="ada@example.com" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid #cbd5e1;border-radius:8px;font-size:15px">
+      <small id="e-email" style="display:block;min-height:18px;font-size:12px;margin:4px 0 14px"></small>
+
+      <label style="display:block;font-size:13px;font-weight:bold;margin-bottom:6px">Age</label>
+      <input id="f-age" placeholder="36" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid #cbd5e1;border-radius:8px;font-size:15px">
+      <small id="e-age" style="display:block;min-height:18px;font-size:12px;margin:4px 0 18px"></small>
+
+      <button onclick="form.check()" style="width:100%;padding:12px;border:0;border-radius:8px;background:#6366f1;color:#fff;font-size:16px;font-weight:bold">Submit</button>
+      <p id="result" style="text-align:center;font-size:14px;font-weight:bold;min-height:20px;margin:16px 0 0"></p>
+    </div>
+  </div>
+</body>

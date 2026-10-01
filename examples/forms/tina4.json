@@ -1,0 +1,6 @@
+{
+  "name": "Forms",
+  "bundleId": "com.tina4.forms",
+  "main": "main.pas",
+  "appUnits": ["AppLogic"]
+}

@@ -146,6 +146,43 @@ with no `<script>`, no CDN, no JS runtime:
 The `<qrcode>` and `<lottie>` tags are part of the engine — the same markup
 renders on every target. See `examples/pages/native-widgets.html`.
 
+## Code editing, in one file
+
+A first-class `<codearea>` element — an editable, syntax-highlighting code box.
+Pick the highlighter with `lang=""` (pascal and php are built in; register more
+from a `.lang` file on disk or a string in memory), add a line-number gutter,
+and the engine paints the coloured tokens natively:
+
+```html
+<codearea lang="php" line-numbers><?php
+function greet($name) {
+  return "Hello, " . $name;   // $variables, strings, keywords — all highlighted
+}
+?></codearea>
+```
+
+And an app's behaviour can live in the page too: `<script type="text/pascal">` is
+**extracted and compiled** into the app at build (native and type-checked — there
+is no runtime script engine), so a whole app can be a single `app.html`:
+
+```html
+<h1 id="n">0</h1>
+<button onclick="app.bump()">+1</button>
+<script type="text/pascal">
+  var Clicks: Integer = 0;
+  procedure Bump(const Args: string);
+  begin Inc(Clicks); SetElementText(FindById(BuiltinsRoot,'n'), IntToStr(Clicks)); BuiltinsDirty := True; end;
+  initialization
+    RegisterAction('app.bump', TTina4ActionProc(@Bump));
+</script>
+```
+
+Examples: `examples/codearea`, `examples/codeeditor`, `examples/codeviewer`,
+`examples/inline` (single-file app), plus `examples/forms` (validation),
+`examples/list` (a live data table) and `examples/chart` (a bar chart). See
+[ADR-0008](plan/adr/0008-text-editing-and-highlighting.md) and
+[ADR-0009](plan/adr/0009-inline-script-extract-compile.md).
+
 ## Toolsets
 
 Everything you drive the stack with — by hand, from an IDE, or from an AI agent.
@@ -367,6 +404,21 @@ Signed downloads (Windows Authenticode + Linux/macOS GPG) are on the
 asset ships a `.sha256`. The macOS build is GPG-signed rather than Apple-notarized,
 so a browser download may be quarantined — verify it, then
 `xattr -dr com.apple.quarantine <binary>` to clear the Gatekeeper flag.
+
+### Unreleased
+
+- **`<codearea>` — a native syntax-highlighting code editor** with a pluggable,
+  multi-language highlighter registry (`src/Tina4Highlight.pas`): pascal + php built
+  in, more loadable from disk/memory; `lang=""` selects it, `line-numbers` adds a
+  gutter. Editable like a `<textarea>`, painted as coloured tokens. ([ADR-0008](plan/adr/0008-text-editing-and-highlighting.md))
+- **Inline `<script type="text/pascal">`** — app behaviour in the page, extracted
+  and **compiled** into the app at build (native, type-checked, no runtime VM), so a
+  project can be a single `app.html`. ([ADR-0009](plan/adr/0009-inline-script-extract-compile.md))
+- **Engine** — text controls now dispatch `oninput` on every edit; controls honour
+  an explicitly-declared `background` (dark-themed forms no longer get the light UA
+  fill).
+- **Examples** — `codearea`, `codeeditor`, `codeviewer`, `inline`, `forms`
+  (validation), `list` (a live data table), `chart` (a bar chart).
 
 ### v1.1.0
 
