@@ -778,6 +778,12 @@ s = s.replace('    sources:\n      - path: app',
 open(f, 'w').write(s)
 PYEOF
   fi
+  # App display name + bundle name = the project's name (the staged Info.plist
+  # ships a generic default); so the home-screen label is the app, not the runtime.
+  if [ -f "$ihost/app/Info.plist" ]; then
+    /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName $iname" "$ihost/app/Info.plist" 2>/dev/null || true
+    /usr/libexec/PlistBuddy -c "Set :CFBundleName $iname" "$ihost/app/Info.plist" 2>/dev/null || true
+  fi
   ( cd "$ihost" && xcodegen >/dev/null ) || die "xcodegen failed"
 }
 
