@@ -1,0 +1,17 @@
+<body style="margin:0;background:#1e1e1e;font-family:sans-serif;color:#d4d4d4">
+  <div style="padding:16px 20px;border-bottom:1px solid #333">
+    <span style="font-size:13px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;color:#9a9a9a">Tina4 Code Editor</span>
+    <span style="font-size:13px;color:#5a5a5a">&nbsp;&middot;&nbsp; a native &lt;codearea&gt; — edit and it re-highlights as you type</span>
+  </div>
+  <div style="padding:18px">
+    <codearea lang="pascal" line-numbers rows="12" style="width:840px">procedure Up(const Args: string);
+var t: THTMLTag;
+begin
+  Inc(Count);              // bump the counter
+  t := FindById(BuiltinsRoot, 'count');
+  if t <> nil then
+    SetElementText(t, IntToStr(Count));
+  BuiltinsDirty := True;   {$IFDEF DEBUG} WriteLn(Count); {$ENDIF}
+end;</codearea>
+  </div>
+</body>

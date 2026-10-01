@@ -1,0 +1,6 @@
+{
+  "name": "Tina4 Code Editor",
+  "bundleId": "com.tina4.codeeditor",
+  "main": "main.pas",
+  "appUnits": []
+}

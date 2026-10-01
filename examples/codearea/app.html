@@ -1,0 +1,39 @@
+<body style="margin:0;background:#141414;font-family:sans-serif;color:#d4d4d4">
+  <div style="padding:18px 22px;border-bottom:1px solid #2a2a2a">
+    <span style="font-size:14px;font-weight:bold;letter-spacing:2px;text-transform:uppercase">Tina4 &lt;codearea&gt;</span>
+    <span style="font-size:13px;color:#6a6a6a">&nbsp;&middot;&nbsp; native, editable, syntax-highlighted — pick the highlighter with lang="…"</span>
+  </div>
+
+  <div style="padding:22px;display:flex;flex-direction:column;gap:20px">
+    <div>
+      <div style="font-size:12px;color:#7a7a7a;letter-spacing:1px;margin-bottom:8px">PHP &nbsp;·&nbsp; lang="php" line-numbers &nbsp;(built in)</div>
+      <codearea lang="php" line-numbers rows="8" style="width:836px"><?php
+function greet($name) {
+  $msg = "Hello, " . $name;   // build the greeting
+  if ($name === 'admin') {
+    return 42;
+  }
+  return $msg;
+}</codearea>
+    </div>
+
+    <div>
+      <div style="font-size:12px;color:#7a7a7a;letter-spacing:1px;margin-bottom:8px">Pascal &nbsp;·&nbsp; lang="pascal" &nbsp;(built in)</div>
+      <codearea lang="pascal" rows="5" style="width:836px">procedure Up(const Args: string);
+begin
+  Inc(Count);              // bump the counter {$IFDEF DEBUG} log {$ENDIF}
+  SetElementText(t, IntToStr(Count));
+end;</codearea>
+    </div>
+
+    <div>
+      <div style="font-size:12px;color:#7a7a7a;letter-spacing:1px;margin-bottom:8px">SQL &nbsp;·&nbsp; lang="sql" line-numbers &nbsp;(loaded from languages/sql.lang at runtime)</div>
+      <codearea lang="sql" line-numbers rows="6" style="width:836px">-- top customers this year
+SELECT c.name, SUM(o.total) AS spend
+FROM customers c
+JOIN orders o ON o.customer_id = c.id
+WHERE o.created >= '2026-01-01'
+GROUP BY c.name ORDER BY spend DESC LIMIT 10;</codearea>
+    </div>
+  </div>
+</body>

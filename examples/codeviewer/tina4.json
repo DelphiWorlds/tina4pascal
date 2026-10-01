@@ -1,0 +1,6 @@
+{
+  "name": "Tina4 Code Viewer",
+  "bundleId": "com.tina4.codeviewer",
+  "main": "main.pas",
+  "appUnits": []
+}

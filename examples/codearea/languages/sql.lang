@@ -1,0 +1,14 @@
+# SQL highlighter — loaded at runtime by the example (disk), proving <codearea>
+# languages are pluggable. Same format works for LoadLanguageFromString (memory).
+# Repeat a key to extend its list (keywords/types/line/block/strings all append).
+name      = sql
+case      = insensitive
+line      = --
+block     = /* */
+strings   = ' "
+keywords  = select from where insert into values update set delete create table drop alter
+keywords  = add column primary key foreign references join inner left right outer full on
+keywords  = group by order having limit offset as distinct and or not null is in like between
+keywords  = union all exists case when then else end asc desc index view
+types     = int integer bigint smallint varchar char text date datetime timestamp
+types     = boolean decimal numeric float double serial uuid json
