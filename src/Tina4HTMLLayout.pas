@@ -661,7 +661,17 @@ procedure TLayoutEngine.FreeSynthTags;
 var i: Integer;
 begin
   if FSynthTags = nil then Exit;
-  for i := 0 to FSynthTags.Count - 1 do FSynthTags[i].Free;
+  for i := 0 to FSynthTags.Count - 1 do
+  begin
+    // A synth wrapper's Parent points at the REAL flex-item tag, but it was never
+    // added to that tag's Children (MakeAnonTextItem). If the app mutated the DOM
+    // since the last layout (e.g. freed that flex item and rebuilt its children),
+    // the Parent now dangles — and THTMLTag.Destroy would deref Parent.Children to
+    // detach itself. Null it first: the synth never lived in the real tree, so there
+    // is nothing to detach. (Fixes a use-after-free crash on dynamic flex rebuilds.)
+    FSynthTags[i].Parent := nil;
+    FSynthTags[i].Free;
+  end;
   FSynthTags.Clear;
 end;
 
@@ -3045,6 +3055,13 @@ begin
       freeCross := crossAvail - totalH;
       ac := LowerCase(st.AlignContent); if ac = '' then ac := 'stretch';
       startY := contentX; lineGap := flexGap;   // startY = starting X (cross axis)
+      // align-content: stretch (default) — grow each column's cross-size (width) to
+      // fill the free cross space so wrapped columns spread across the container.
+      if (ac = 'stretch') and (freeCross > 0) and (nlines > 0) then
+      begin
+        for k := 0 to nlines - 1 do lineHA[k] := lineHA[k] + freeCross / nlines;
+        freeCross := 0;
+      end;
       if freeCross > 0 then
       begin
         if ac = 'center' then startY := startY + freeCross / 2
@@ -3122,6 +3139,13 @@ begin
       freeCross := crossAvail - totalH;
       ac := LowerCase(st.AlignContent); if ac = '' then ac := 'stretch';
       startY := contentY; lineGap := flexGap;
+      // align-content: stretch (default) — grow each line's cross-size (height) to
+      // fill the free cross space so wrapped lines spread across the container.
+      if (ac = 'stretch') and (freeCross > 0) and (nlines > 0) then
+      begin
+        for k := 0 to nlines - 1 do lineHA[k] := lineHA[k] + freeCross / nlines;
+        freeCross := 0;
+      end;
       if freeCross > 0 then
       begin
         if ac = 'center' then startY := startY + freeCross / 2
