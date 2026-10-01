@@ -2,5 +2,5 @@
   "name": "Mountains",
   "bundleId": "com.tina4.mountains",
   "main": "main.pas",
-  "appUnits": ["AppLogic"]
+  "appUnits": []
 }

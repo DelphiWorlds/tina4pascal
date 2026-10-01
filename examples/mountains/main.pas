@@ -1,9 +1,9 @@
 program main;
-{ Animated parallax mountains behind the flamingo + cheetah. The ranges are 2D
-  canvases drawn in src/AppLogic.pas; CSS @keyframes drift each at its own speed. }
+{ Parallax desert scene — layered image depths (far range, range, rock ledge, duo)
+  with gentle CSS sway/bob. Pure HTML + CSS + images; no app code, no WebView. }
 {$mode delphi}{$H+}
 {$IFDEF WINDOWS}{$apptype gui}{$ENDIF}
-uses SysUtils, AppLogic, Tina4App;
+uses SysUtils, Tina4App;
 var here: string;
 begin
   here := ExtractFilePath(ParamStr(0));
