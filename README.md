@@ -421,7 +421,7 @@ so a browser download may be quarantined — verify it, then
   use-after-free on dynamic flex rebuilds is fixed.
 - **Examples** — `codearea`, `codeeditor`, `codeviewer`, `inline`, `forms`
   (validation), `list` (a live data table), `chart` (a bar chart), `parallax`
-  (fixed + onscroll + 3D perspective).
+  (fixed + onscroll + 3D perspective), `mountains` (animated 2D-canvas parallax ranges).
 
 ### v1.1.0
 
