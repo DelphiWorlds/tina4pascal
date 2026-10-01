@@ -52,8 +52,10 @@ gets an **ADR**. Conventions and templates: [`plan/README.md`](plan/README.md).
 - [ADR-0005](plan/adr/0005-ios-device-only.md) — iOS is device-only
 - [ADR-0006](plan/adr/0006-gradle-free-android.md) — gradle-free Android packaging
 - [ADR-0007](plan/adr/0007-signed-releases.md) — signed, verifiable releases
+- [ADR-0008](plan/adr/0008-text-editing-and-highlighting.md) — `<codearea>`, highlighter registry, text-edit model
 
 ### Task plans — `plan/`
+- [code-editing-highlighting](plan/code-editing-highlighting.md) — `<codearea>` + Tina4Highlight
 - [android-emulator-kitchen-sink](plan/android-emulator-kitchen-sink.md)
 - [ios-device-tooling-maintenance](plan/ios-device-tooling-maintenance.md)
 - [mcp-surface-audit](plan/mcp-surface-audit.md)

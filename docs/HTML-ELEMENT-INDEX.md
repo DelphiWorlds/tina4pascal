@@ -130,6 +130,7 @@ works everywhere, no core `SameText` edits. Two tiers, both proven by
 | **input[date]** | ✅ | **native calendar picker** — formatted display (`format` attr), month nav, today, ISO value (see examples/datepicker) |
 | input[color/range/tel/url/…] | ✅/🟡 | color swatch + range slider drawn; tel/url as text |
 | textarea | ✅ | multi-line editing: click positions the caret (line by Y, column by X); type/backspace/delete at the caret; Enter splits the line; ←/→ and ↑/↓ navigate (↑/↓ keep the column across lines) |
+| **codearea** | ✅ | **syntax-highlighting code editor** — edits like a `<textarea>` but paints coloured tokens; `lang="…"` picks the highlighter (pascal, php built in; load more from disk/memory via Tina4Highlight), `line-numbers` adds a gutter; body is literal (keeps `<?php`, `<`); `value` seeded from body. See examples/codearea, ADR-0008 |
 | select, option | ✅ | drawn dropdown overlay with ✓ |
 | optgroup | ✅ | label row + indented options in the dropdown; nested options selectable and resolved when closed |
 | button | ✅ | drawn; submit |
