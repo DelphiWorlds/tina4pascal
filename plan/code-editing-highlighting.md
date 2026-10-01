@@ -19,10 +19,11 @@ code. See [ADR-0008](adr/0008-text-editing-and-highlighting.md).
       selection, arrow/Home/End, click-to-place → unlocks mid-buffer editing and the
       single-pane overlay for plain textareas.
 - [ ] **DOM load/ready action** so a control can seed its first paint without a keystroke.
-- [ ] **`<script type="text/pascal">` extract-and-compile** (requested): lift inline
-      Pascal from app.html at build time into a generated AppLogic unit and compile it
-      in, so UI + behaviour live in one file. AOT, not interpreted (the engine has no
-      Pascal VM). Needs CLI work in `tools/tina4pascal` (run / build / --dump-html).
+- [x] **`<script type="text/pascal">` extract-and-compile** (desktop `dev`): lift
+      inline Pascal from app.html into a generated unit and compile it in; a project
+      can be just an app.html. AOT, not interpreted (ADR-0009). `examples/inline`.
+  - [ ] extend the same extraction to `build`/`run_project` + mobile (`--dump-html`,
+        `appUnits` packaging).
 - [ ] Multi-line block comments/strings coloured across line breaks (currently per-line).
 
 ## Parity

@@ -1,0 +1,37 @@
+<body style="margin:0;background:#0f172a;color:#e2e8f0;font-family:sans-serif;text-align:center">
+  <div style="padding:60px 24px">
+    <div style="font-size:13px;letter-spacing:2px;text-transform:uppercase;color:#64748b;margin-bottom:8px">One file · HTML + Pascal</div>
+    <h1 id="n" style="font-size:72px;margin:10px 0">0</h1>
+    <button onclick="app.bump()" style="font-size:20px;padding:12px 28px;border:0;border-radius:10px;background:#6366f1;color:#fff">+1</button>
+    <button onclick="app.reset()" style="font-size:20px;padding:12px 20px;border:1px solid #334155;border-radius:10px;background:#1e293b;color:#e2e8f0;margin-left:8px">reset</button>
+    <p style="color:#64748b;font-size:14px;margin-top:28px">behaviour lives in the &lt;script type="text/pascal"&gt; below — extracted &amp; compiled at build</p>
+  </div>
+
+  <script type="text/pascal">
+  var Clicks: Integer = 0;
+
+  procedure Refresh;
+  var t: THTMLTag;
+  begin
+    t := FindById(BuiltinsRoot, 'n');
+    if t <> nil then SetElementText(t, IntToStr(Clicks));
+    BuiltinsDirty := True;
+  end;
+
+  procedure Bump(const Args: string);
+  begin
+    Inc(Clicks);
+    Refresh;
+  end;
+
+  procedure Reset(const Args: string);
+  begin
+    Clicks := 0;
+    Refresh;
+  end;
+
+  initialization
+    RegisterAction('app.bump',  TTina4ActionProc(@Bump));
+    RegisterAction('app.reset', TTina4ActionProc(@Reset));
+  </script>
+</body>

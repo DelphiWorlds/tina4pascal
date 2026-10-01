@@ -259,6 +259,64 @@ build_prog() {
   if [ -d "$PWD/fonts" ]; then mkdir -p "$outdir/fonts"; cp "$PWD/fonts/"*.ttf "$outdir/fonts/" 2>/dev/null || true; fi
 }
 
+# prepare_inline <dir> — extract-and-compile <script type="text/pascal"> from the
+# app's app.html so UI and behaviour can live in ONE file. Each such block is lifted
+# into a generated unit (<dir>/.tina4/AppInline.pas); the engine ignores <script> at
+# render time, so nothing is shown. If the project has no main.pas, a host main is
+# generated too — so an app can be just an app.html. The body is ordinary Pascal: your
+# procedures plus an `initialization` section that RegisterAction(...)s them. Add units
+# with <script type="text/pascal" uses="Tina4Http,Foo">. Echoes the .tina4 dir if it
+# generated anything (so the caller adds -Fu and may use the generated main), else "".
+prepare_inline() {
+  _d="$1"; _html="$_d/app.html"
+  [ -f "$_html" ] || { printf ''; return 0; }
+  grep -qiE "<script[^>]*text/pascal" "$_html" || { printf ''; return 0; }
+  _out="$_d/.tina4"; mkdir -p "$_out"
+  _name="$(cd "$_d" && jget name "$(basename "$(pwd)")")"
+  _have_main=0; [ -f "$_d/main.pas" ] && _have_main=1
+  INLINE_HTML="$_html" INLINE_OUT="$_out" INLINE_NAME="$_name" INLINE_HAVE_MAIN="$_have_main" \
+  python3 - <<'PY' || return 1
+import os, re, html
+src = open(os.environ['INLINE_HTML'], 'r', encoding='utf-8', errors='replace').read()
+out = os.environ['INLINE_OUT']; name = os.environ['INLINE_NAME']
+have_main = os.environ['INLINE_HAVE_MAIN'] == '1'
+bodies, uses = [], []
+for m in re.finditer(r'<script\b([^>]*)>(.*?)</script>', src, re.S | re.I):
+    attrs, body = m.group(1), m.group(2)
+    if not re.search(r'type\s*=\s*["\']text/pascal["\']', attrs, re.I):
+        continue
+    u = re.search(r'\buses\s*=\s*["\']([^"\']*)["\']', attrs, re.I)
+    if u: uses += [x.strip() for x in u.group(1).split(',') if x.strip()]
+    bodies.append(html.unescape(body).strip('\n'))
+if not bodies:
+    raise SystemExit(0)
+extra = (', ' + ', '.join(dict.fromkeys(uses))) if uses else ''
+unit = (
+    "unit AppInline;\n"
+    "{ GENERATED from <script type=\"text/pascal\"> in app.html — do not edit by hand. }\n"
+    "{$mode delphi}{$H+}\n"
+    "interface\n"
+    "implementation\n"
+    "uses\n"
+    "  SysUtils, Classes, Tina4HTMLDom, Tina4Events, Tina4Builtins, Tina4HTMLLayout" + extra + ";\n\n"
+    + "\n\n".join(bodies) + "\n\n"
+    "end.\n")
+open(os.path.join(out, 'AppInline.pas'), 'w', encoding='utf-8').write(unit)
+if not have_main:
+    prog = (
+        "program main;\n"
+        "{ GENERATED host — the app is app.html + its inline <script type=\"text/pascal\">. }\n"
+        "{$mode delphi}{$H+}\n"
+        "{$IFDEF WINDOWS}{$apptype gui}{$ENDIF}\n"
+        "uses SysUtils, AppInline, Tina4App;\n"
+        "begin\n"
+        "  RunApp('" + name.replace("'", "''") + "', GetCurrentDir, 'app.html', '{}', '', 480, 640);\n"
+        "end.\n")
+    open(os.path.join(out, 'main.pas'), 'w', encoding='utf-8').write(prog)
+PY
+  printf '%s' "$_out"
+}
+
 # Authenticode-sign a Windows .exe with osslsigncode (cross-platform, so we sign
 # straight from the Mac cross-build). Two key sources, tried in order:
 #
@@ -1232,11 +1290,25 @@ cmd_new() {
 
 # build + run an app folder's main.pas on macOS (edit app.html, re-run to see)
 cmd_dev() {
-  d="${1:-.}"; [ -f "$d/main.pas" ] || die "no main.pas in '$d' (scaffold one: tina4pascal new <name>)"
+  d="${1:-.}"
   need_fpc
+  # Extract-and-compile any <script type="text/pascal"> in app.html (one-file apps).
+  inlined="$(prepare_inline "$d")"
+  main="$d/main.pas"
+  if [ ! -f "$main" ]; then
+    if [ -n "$inlined" ] && [ -f "$inlined/main.pas" ]; then
+      main="$inlined/main.pas"                        # app is app.html + inline <script>
+    else
+      die "no main.pas in '$d' (scaffold one: tina4pascal new <name>, or add <script type=\"text/pascal\"> to app.html)"
+    fi
+  fi
   o="$BUILD/dev"; mkdir -p "$o"
-  say "${D}fpc $(basename "$d")/main.pas${Z}"
-  "$FPC" -Mdelphi -O2 -Xs -Fu"$SRC" -FE"$o" -FU"$o" -o"$o/app" "$d/main.pas" 2>&1 \
+  extra=""
+  [ -n "$inlined" ] && extra="-Fu$inlined"
+  [ -d "$d/src" ] && extra="$extra -Fu$d/src"
+  say "${D}fpc $(basename "$d") → app${Z}"
+  # shellcheck disable=SC2086
+  "$FPC" -Mdelphi -O2 -Xs -Fu"$SRC" $extra -FE"$o" -FU"$o" -o"$o/app" "$main" 2>&1 \
     | grep -Ei "error|fatal" && die "build failed" || true
   ( cd "$d" && exec "$o/app" )   # runs from the app folder (app.html + localStore)
 }

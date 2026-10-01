@@ -171,8 +171,9 @@ wishlist.
 minimal event hook (`Tina4Builtins`: `dialog.show/showModal/close`,
 `output.recalc` + a tiny arithmetic evaluator, dispatched from plain `onclick`/
 `oninput` via `Tina4Events`) unblocked the last two (`<output>`, `<dialog>`
-modal) without a JS engine. Anything richer (arbitrary scripting) stays out of
-scope by design — native apps consume APIs built elsewhere.
+modal) without a JS engine. There is still no runtime scripting engine by design;
+for app logic in the page, `<script type="text/pascal">` is extracted and **compiled**
+at build (ADR-0009), so behaviour is native Pascal, not interpreted.
 
 **Done recently:** `<output>` formula binding + `<dialog>` show/close/modal (event
 hook); `<textarea>` mid-text editing; `input[number]` steppers; `<fieldset>`

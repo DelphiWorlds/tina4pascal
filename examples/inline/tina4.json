@@ -1,0 +1,6 @@
+{
+  "name": "Inline Demo",
+  "bundleId": "com.tina4.inline",
+  "main": "app.html",
+  "appUnits": []
+}
