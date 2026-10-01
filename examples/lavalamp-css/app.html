@@ -1,71 +1,61 @@
 <!doctype html>
 <html><head><style>
   /* A lava lamp in pure HTML + CSS — no canvas, no Pascal, no JS.
-     Merge/split is the "goo" filter trick: a parent blur() bleeds each blob's
-     edge into its neighbours and contrast() pushes the blurred ramp back toward
-     a hard edge, so blobs that touch fuse into one surface and pinch apart as
-     they separate. The goo layer keeps a TRANSPARENT background so the filter
-     only acts on the blobs (an opaque bg turns the whole layer into a block).
-     The engine animates the @keyframes on its own ticker. */
+     Sized in vh so the whole lamp scales with the window HEIGHT and stays
+     centred; the blur/contrast "goo" fuses/splits the blobs as they drift. */
 
   html,body{margin:0;height:100%}
-  body{background:#0b0710;color:#e7d8ff;font-family:sans-serif;
-       display:flex;flex-direction:column;align-items:center;
-       justify-content:center;padding:14px 16px}
-  h1{font-size:17px;font-weight:600;letter-spacing:.08em;margin:0 0 10px;
+  body{background:#0b0710;color:#e7d8ff;font-family:sans-serif;text-align:center}
+  /* a real div (not body) as the full-viewport flex column: this engine centres
+     flex children of a div, so align-items:center places the lamp dead-centre. */
+  .stage{width:100vw;height:100vh;box-sizing:border-box;padding:2vh 16px;
+         display:flex;flex-direction:column;align-items:center;justify-content:center}
+  h1{width:100%;font-size:2.1vh;font-weight:600;letter-spacing:.08em;margin:0 0 1.2vh;
      text-transform:uppercase}
-  p{color:#6b5b86;font-size:12px;margin:12px 0 0;letter-spacing:.05em}
+  p{width:100%;color:#6b5b86;font-size:1.5vh;margin:1.4vh 0 0;letter-spacing:.05em}
 
-  .lamp{position:relative;width:220px;height:560px;
+  /* one scale: everything below is the original px design × 0.155, in vh */
+  .lamp{position:relative;width:34.1vh;height:80vh;
         display:flex;flex-direction:column;align-items:center}
 
-  .cap{width:118px;height:26px;border-radius:8px 8px 4px 4px;
+  .cap{width:18.3vh;height:4vh;border-radius:1.24vh 1.24vh .62vh .62vh;
        background:linear-gradient(#6b6880,#33323f);z-index:3}
-  .base{width:150px;height:42px;border-radius:6px 6px 14px 14px;
-        background:linear-gradient(#33323f,#6b6880);z-index:3;margin-top:-8px}
+  .base{width:23.3vh;height:6.5vh;border-radius:.93vh .93vh 2.17vh 2.17vh;
+        background:linear-gradient(#33323f,#6b6880);z-index:3;margin-top:-1.24vh}
 
   /* pill-shaped glass vessel with a lit liquid */
-  .glass{position:relative;width:176px;height:496px;overflow:hidden;
-         border-radius:88px;
+  .glass{position:relative;width:27.3vh;height:76.9vh;overflow:hidden;
+         border-radius:13.64vh;
          background:radial-gradient(circle at 50% 72%, #5a3a8f 0%, #331e59 52%, #180f2c 100%);
          box-shadow:inset 0 0 28px rgba(0,0,0,.45), 0 16px 50px rgba(0,0,0,.6);
          border:1px solid #2a1c44}
 
-  /* the goo: blur+contrast fuses/splits the blobs. The engine's filter layer has
-     an opaque (dark) background, so the vessel interior reads black — a "black-lit"
-     lava lamp. Keep it inset:0 so the rounded top clips it cleanly, and keep every
-     blob clear of the bottom edge (below) so the filter never snaps into a slab. */
-  .goo{position:absolute;inset:0;filter:blur(7px) contrast(8)}
-  /* pixel left (percentage left isn't honoured for absolute children); glass is
-     176 wide, so ~centred is left ≈ 88 - width/2, with a little variety. */
+  /* the goo: blur+contrast fuses/splits the blobs (blur in vh so it scales too) */
+  .goo{position:absolute;inset:0;filter:blur(1.08vh) contrast(8)}
   .blob{position:absolute;border-radius:50%;background:#ff7d24}
 
   /* a slim glass sheen, above the goo (unfiltered) */
-  .sheen{position:absolute;top:34px;left:24px;width:12px;height:300px;
-         border-radius:8px;z-index:2;
+  .sheen{position:absolute;top:5.27vh;left:3.72vh;width:1.86vh;height:46.5vh;
+         border-radius:1.24vh;z-index:2;
          background:linear-gradient(rgba(255,255,255,.14),rgba(255,255,255,0))}
 
-  /* Staggered start heights so they're spread up the tube from the first frame
-     (the engine clamps negative animation-delay to 0). Different periods drift
-     in and out of phase, so blobs meet and part — merge and split — as they go.
-     Narrow enough that two side-by-side don't span the whole vessel. */
-  .b1{width:74px;height:74px;left:44px;top:280px;
+  .b1{width:11.47vh;height:11.47vh;left:6.82vh;top:43.4vh;
       animation:rise1 15s ease-in-out infinite}
-  .b2{width:56px;height:56px;left:40px;top:150px;
+  .b2{width:8.68vh;height:8.68vh;left:6.2vh;top:23.25vh;
       animation:rise2 19s ease-in-out infinite}
-  .b3{width:62px;height:62px;left:74px;top:70px;
+  .b3{width:9.61vh;height:9.61vh;left:11.47vh;top:10.85vh;
       animation:rise3 23s ease-in-out infinite}
-  .b4{width:50px;height:50px;left:66px;top:320px;
+  .b4{width:7.75vh;height:7.75vh;left:10.23vh;top:49.6vh;
       animation:rise1 17s ease-in-out infinite}
-  .b5{width:44px;height:44px;left:46px;top:210px;
+  .b5{width:6.82vh;height:6.82vh;left:7.13vh;top:32.55vh;
       animation:rise2 21s ease-in-out infinite}
 
-  /* Amplitudes keep the lowest reach well above the vessel bottom (~496px). */
-  @keyframes rise1{0%,100%{transform:translateY(0)} 50%{transform:translateY(-150px)}}
-  @keyframes rise2{0%,100%{transform:translateY(0)} 50%{transform:translateY(90px)}}
-  @keyframes rise3{0%,100%{transform:translateY(0)} 50%{transform:translateY(140px)}}
+  @keyframes rise1{0%,100%{transform:translateY(0)} 50%{transform:translateY(-23.25vh)}}
+  @keyframes rise2{0%,100%{transform:translateY(0)} 50%{transform:translateY(13.95vh)}}
+  @keyframes rise3{0%,100%{transform:translateY(0)} 50%{transform:translateY(21.7vh)}}
 </style></head><body>
 
+ <div class="stage">
   <h1>Tina4 Lava Lamp &middot; CSS</h1>
 
   <div class="lamp">
@@ -84,5 +74,6 @@
   </div>
 
   <p>pure HTML + CSS &middot; @keyframes + blur/contrast goo</p>
+ </div>
 
 </body></html>
