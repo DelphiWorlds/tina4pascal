@@ -1325,6 +1325,7 @@ begin
   live := NSMutableSet.setWithCapacity(8);
   for i := 0 to n - 1 do
   begin
+    if TinaEmbedKind(i) >= 2 then Continue;   // 0=video 1=audio; skip scanner(2)/3d(3)/camera-view(4)
     TinaEmbedRect(i, x, y, w, h);
     src := TinaEmbedSrc(i);
     if (w <= 0) or (h <= 0) or (src = '') then Continue;

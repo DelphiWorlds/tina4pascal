@@ -2376,6 +2376,25 @@ begin
     GEmbeds[n].Flags := 0;
     if c.HasAttribute('torch') then GEmbeds[n].Flags := GEmbeds[n].Flags or 1;
   end
+  else if (Box.Tag <> nil) and SameText(Box.Tag.TagName, 'camera-view') then
+  begin
+    { A live camera preview (no decoder): the core lays out the placeholder box; a
+      shell overlays a native camera preview over it (same overlay model as <video>
+      and <barcode-scanner>) via StartCameraPreview. Src carries the element id (so
+      a shell can key its session + GrabCameraFrame), Formats carries `facing`. }
+    c := Box.Tag;
+    n := Length(GEmbeds); SetLength(GEmbeds, n + 1);
+    GEmbeds[n].Src := c.GetAttribute('id');
+    GEmbeds[n].Poster := '';
+    GEmbeds[n].X := Box.X;
+    GEmbeds[n].Y := Box.Y - GScrollY;
+    GEmbeds[n].W := Box.W;
+    GEmbeds[n].H := Box.H;
+    GEmbeds[n].Kind := 4;
+    GEmbeds[n].Formats := c.GetAttribute('facing', 'back');   // 'front' | 'back'
+    GEmbeds[n].OnScan := ''; GEmbeds[n].ResultSel := '';
+    GEmbeds[n].Flags := 0;
+  end
   else if (Box.Tag <> nil) and
           (SameText(Box.Tag.TagName, 'scene') or SameText(Box.Tag.TagName, 'model')) then
   begin
