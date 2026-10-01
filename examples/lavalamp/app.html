@@ -1,0 +1,22 @@
+<!doctype html>
+<html><head><style>
+  html,body{margin:0;height:100%}
+  body{background:#0b0710;color:#cdb8ff;font-family:sans-serif;
+       display:flex;flex-direction:column;align-items:center;
+       justify-content:center;padding:14px 16px}
+  h1{font-size:17px;font-weight:600;letter-spacing:.08em;margin:0 0 10px;
+     color:#e7d8ff;text-transform:uppercase}
+  .lamp{border-radius:18px;background:#0b0710;
+        box-shadow:0 22px 60px rgba(0,0,0,.6)}
+  p{color:#6b5b86;font-size:12px;margin:12px 0 0;letter-spacing:.05em}
+</style></head><body>
+
+  <h1>Tina4 Lava Lamp</h1>
+
+  <!-- The whole animation is drawn by a Pascal painter registered for this id
+       (src/AppLogic.pas -> RegisterCanvasPainter('lava', ...)). No JavaScript. -->
+  <canvas id="lava" class="lamp" width="380" height="600"></canvas>
+
+  <p>pure Pascal &middot; no widgets &middot; canvas painter</p>
+
+</body></html>
