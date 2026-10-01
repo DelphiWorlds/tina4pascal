@@ -1186,7 +1186,8 @@ var
   isArea: Boolean;
 begin
   if FocusTag = nil then Exit;
-  isArea := SameText(FocusTag.TagName, 'textarea');
+  isArea := SameText(FocusTag.TagName, 'textarea')
+         or SameText(FocusTag.TagName, 'codearea');   // codearea edits like a multi-line area
   if isArea then
     v := FocusTag.GetAttribute('value', InnerText(FocusTag))
   else

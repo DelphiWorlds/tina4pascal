@@ -13,7 +13,7 @@ interface
 uses
   SysUtils, Classes, Math, Generics.Collections,
   Tina4HTMLDom, Tina4RenderBackend, Tina4Theme, Tina4QR, Tina4SVG, Tina4Canvas2D,
-  Tina4Lottie, Tina4RasterCanvas, Tina4Elements, Tina4Hyphen;
+  Tina4Lottie, Tina4RasterCanvas, Tina4Elements, Tina4Hyphen, Tina4Highlight;
 
 type
   TTextRun = record
@@ -351,6 +351,7 @@ end;
 function IsFormControlTag(const Name: string): Boolean;
 begin
   Result := SameText(Name, 'input') or SameText(Name, 'textarea') or
+    SameText(Name, 'codearea') or
     SameText(Name, 'select') or SameText(Name, 'button') or
     SameText(Name, 'camera') or SameText(Name, 'recorder') or
     SameText(Name, 'progress') or SameText(Name, 'meter') or
@@ -1370,7 +1371,7 @@ var
   typ: string;
 begin
   typ := LowerCase(Tag.GetAttribute('type', 'text'));
-  if SameText(Tag.TagName, 'textarea') then Result := ckTextarea
+  if SameText(Tag.TagName, 'textarea') or SameText(Tag.TagName, 'codearea') then Result := ckTextarea
   else if SameText(Tag.TagName, 'select') then Result := ckSelect
   else if SameText(Tag.TagName, 'button') then Result := ckButton
   else if SameText(Tag.TagName, 'progress') then Result := ckProgress
@@ -2120,14 +2121,14 @@ begin
           St.Padding.SetAll(TC_PAD_V);
           St.Padding.Left := TC_PAD_H; St.Padding.Right := TC_PAD_H;
         end;
-        if ((St.BackgroundColor shr 24) = 0) and (not St.BgGradientActive) then St.BackgroundColor := TC_SURFACE;
+        if ((St.BackgroundColor shr 24) = 0) and (not St.BgGradientActive) and (not St.BackgroundExplicit) then St.BackgroundColor := TC_SURFACE;
         if St.Color = TAlphaColors.Black then St.Color := TC_INK;
         if St.BorderRadius < 0 then St.BorderRadius := TC_RADIUS;
       end;
     ckButton, ckFile:
       begin
-        // a CSS background gradient on the control wins over the UA default fill
-        if ((St.BackgroundColor shr 24) = 0) and (not St.BgGradientActive) then
+        // a CSS background (gradient or explicit colour) on the control wins over the UA default fill
+        if ((St.BackgroundColor shr 24) = 0) and (not St.BgGradientActive) and (not St.BackgroundExplicit) then
         begin
           if Primary then
           begin // submit → indigo primary
@@ -2215,6 +2216,10 @@ var
   lines: TStringList;
   opt: THTMLTag;
   seg: string;
+  isCode, showNums: Boolean;
+  gutterW, cx: Single;
+  hlLang: string;
+  tk: THLToken;
 begin
   kind := ControlKindOf(Tag);
   Result := TLayoutBox.Create;
@@ -2381,17 +2386,52 @@ begin
       // lines so the caret line stays visible while typing.
       firstLine := 0;
       if lines.Count > rows then firstLine := lines.Count - rows;
+      // <codearea>: syntax-highlight each line (lang="…") and optionally show a
+      // line-number gutter (attribute line-numbers / linenumbers). Everything else
+      // is a plain <textarea>: one flat-coloured run per line.
+      isCode := SameText(Tag.TagName, 'codearea');
+      gutterW := 0;
+      if isCode then
+      begin
+        hlLang := Tag.GetAttribute('lang', 'pascal');
+        showNums := Tag.HasAttribute('line-numbers') or Tag.HasAttribute('linenumbers');
+        if showNums then
+          gutterW := FCanvas.MeasureText(IntToStr(lines.Count) + ' ',
+                       St.FontSize, FontStylesOf(St)).Width + 10;
+      end;
       for i := firstLine to lines.Count - 1 do
       begin
-        run.Text := lines[i];
         run.X := St.BorderWidths.Left + St.Padding.Left;
         run.Y := St.BorderWidths.Top + St.Padding.Top + (i - firstLine) * lineH;
         run.FontSize := St.FontSize;
         run.Styles := FontStylesOf(St);
         run.Color := St.Color; run.LetterSpacing := 0;
         run.FontWeight := St.FontWeight; run.ShadowColor := 0; run.ShadowDX := 0; run.ShadowDY := 0;
-    ComputeDecor(St, run.Styles, run.DecorLines, run.DecorStyle, run.DecorColor, run.DecorThickness, run.DecorOffset);
-        Result.Runs.Add(run);
+        ComputeDecor(St, run.Styles, run.DecorLines, run.DecorStyle, run.DecorColor, run.DecorThickness, run.DecorOffset);
+        if not isCode then
+        begin
+          run.Text := lines[i];
+          Result.Runs.Add(run);
+          Continue;
+        end;
+        // line-number gutter (muted, right-padded)
+        if showNums then
+        begin
+          run.Text := IntToStr(i + 1);
+          run.Color := $FF6E7681;
+          Result.Runs.Add(run);
+        end;
+        // coloured token runs, advancing X across the line
+        cx := run.X + gutterW;
+        for tk in HighlightTokens(lines[i], hlLang) do
+        begin
+          if tk.Kind = hlDefault then run.Color := St.Color
+          else run.Color := DefaultColor(tk.Kind);
+          run.Text := tk.Text;
+          run.X := cx;
+          Result.Runs.Add(run);
+          cx := cx + FCanvas.MeasureText(tk.Text, St.FontSize, run.Styles).Width;
+        end;
       end;
     finally
       lines.Free;

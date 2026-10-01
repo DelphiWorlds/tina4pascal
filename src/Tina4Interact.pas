@@ -900,7 +900,7 @@ begin
   el := FindById(GParser.Root, s);
   if el = nil then Exit;
   if SameText(el.TagName, 'input') or SameText(el.TagName, 'textarea')
-     or SameText(el.TagName, 'select') then
+     or SameText(el.TagName, 'codearea') or SameText(el.TagName, 'select') then
     SetAttr(el, 'value', Val)
   else
     SetElemText(el, Val);
@@ -2166,6 +2166,11 @@ begin
   SetAttr(GFocusedTag, 'value', val);
   Tina4CaretVisible := True;
   GLayoutDirty := True;
+  { Fire oninput so app logic can react to the edit on every keystroke — the same
+    contract the range slider uses. This is what makes a live highlighter / editor
+    possible: the handler reads value and rebuilds a highlighted view. }
+  if GFocusedTag.HasAttribute('oninput') then
+    DispatchAction(GFocusedTag.GetAttribute('oninput'));
 end;
 
 function TinaFocusKind: Integer;

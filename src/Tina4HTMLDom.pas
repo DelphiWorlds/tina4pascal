@@ -338,6 +338,8 @@ type
     AppearanceNone: Boolean;    // appearance:none — strip native control chrome
     AccentColor: TAlphaColor;   // accent-color for checkboxes/radios/range (0=auto)
     CaretColor: TAlphaColor;    // caret-color for the text caret (0=auto)
+    BackgroundExplicit: Boolean;// author declared a background (even 'transparent') —
+                                // controls then keep it instead of the UA surface fill
     PointerEventsNone: Boolean; // pointer-events:none — transparent to hit-testing
     BorderCollapse: Boolean;    // border-collapse:collapse (default separate)
     BorderSpacing: Single;      // border-spacing (separate model), px
@@ -2462,6 +2464,25 @@ begin
         if IsVoidTag(TagName) or SelfClose then
           Continue;
 
+        // <codearea> — a code editor control: its body is LITERAL source (which may
+        // contain '<', e.g. PHP's <?php), so read it raw like <script>, keep it as a
+        // single #text child, and seed the control's `value`. The lang attr picks the
+        // highlighter; rendering/editing is handled as a textarea in the layout.
+        if SameText(TagName, 'codearea') then
+        begin
+          RawText := ReadRawContent(TagName);
+          RawText := DecodeEntities(RawText);
+          if (Length(RawText) > 0) and (RawText[1] = #10) then Delete(RawText, 1, 1); // drop one leading newline after the tag
+          TextNode := THTMLTag.Create;
+          TextNode.TagName := '#text';
+          TextNode.Text := RawText;
+          TextNode.Parent := ChildTag;
+          ChildTag.Children.Add(TextNode);
+          if not ChildTag.HasAttribute('value') then
+            ChildTag.Attributes.AddOrSetValue('value', RawText);
+          Continue;
+        end;
+
         // Recurse children. Preserve raw whitespace inside <pre>, and inside any
         // element whose inline style asks for a preformatted white-space mode
         // (so `<div style="white-space:pre-wrap">` keeps its newlines — the DOM
@@ -2769,7 +2790,7 @@ begin
   Result.GradStopCount := 0;
   Result.BackgroundClipText := False;
   Result.AppearanceNone := False;
-  Result.AccentColor := 0; Result.CaretColor := 0; Result.PointerEventsNone := False; Result.BorderCollapse := False; Result.BorderSpacing := 0;
+  Result.AccentColor := 0; Result.CaretColor := 0; Result.BackgroundExplicit := False; Result.PointerEventsNone := False; Result.BorderCollapse := False; Result.BorderSpacing := 0;
   Result.TransformActive := False;
   Result.TransformScaleX := 1;
   Result.TransformSkewX := 0; Result.TransformSkewY := 0; Result.TransformOriginX := -50; Result.TransformOriginY := -50;
@@ -3351,7 +3372,7 @@ begin
   Result.GradStopCount := 0;
   Result.BackgroundClipText := False;
   Result.AppearanceNone := False;
-  Result.AccentColor := 0; Result.CaretColor := 0; Result.PointerEventsNone := False; Result.BorderCollapse := False; Result.BorderSpacing := 0;
+  Result.AccentColor := 0; Result.CaretColor := 0; Result.BackgroundExplicit := False; Result.PointerEventsNone := False; Result.BorderCollapse := False; Result.BorderSpacing := 0;
   Result.TransformActive := False;
   Result.TransformScaleX := 1;
   Result.TransformSkewX := 0; Result.TransformSkewY := 0; Result.TransformOriginX := -50; Result.TransformOriginY := -50;
@@ -3423,6 +3444,22 @@ begin
     Result.BackgroundColor := $FFF0F0F0;
     Result.Padding.Left := 3;
     Result.Padding.Right := 3;
+  end
+  else if TN = 'codearea' then
+  begin
+    // a code editor control: dark editor theme by default (author may override),
+    // monospace, preformatted. An opaque default background means the control
+    // chrome won't substitute the light UA surface (see ApplyControlChrome).
+    Result.FontFamily := 'Courier New';
+    Result.FontSize := 14;
+    Result.BackgroundColor := $FF1E1E1E;
+    Result.Color := $FFD4D4D4;
+    Result.WhiteSpace := 'pre';
+    Result.Padding.SetAll(12);
+    Result.SetBorderWidth(1);
+    Result.SetBorderColor($FF333333);
+    Result.BorderRadius := 8;
+    Result.BackgroundExplicit := True;   // keep the dark bg through control chrome
   end
   else if (TN = 'b') or (TN = 'strong') then
     Result.Bold := True
@@ -4206,9 +4243,13 @@ begin
   if Decls.TryGetValue('color', Temp) and not ShouldSkip(Temp) then
     Style.Color := ParseColor(Temp);
   if Decls.TryGetValue('background-color', Temp) and not ShouldSkip(Temp) then
+  begin
     Style.BackgroundColor := ParseColor(Temp);
+    Style.BackgroundExplicit := True;   // author set it — controls keep it (even transparent)
+  end;
   if Decls.TryGetValue('background', Temp) and not ShouldSkip(Temp) then
   begin
+    Style.BackgroundExplicit := True;
     BgVal := Temp.Trim;
     // Extract url(...) if present
     if BgVal.ToLower.Contains('url(') then
