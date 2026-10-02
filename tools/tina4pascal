@@ -1389,6 +1389,13 @@ cmd_dev() {
   # project main.pas opts in with `uses Tina4EmbeddedPages;` (auto on mobile).
   paged="$(prepare_pages "$d")"
   o="$BUILD/dev"; mkdir -p "$o"
+  # The dev unit cache ($BUILD/dev) is shared across runs, so an edited engine
+  # unit under src/ can leave a stale .ppu and the app renders OLD code. If any
+  # engine source is newer than the last built binary, drop the cached units so
+  # FPC recompiles the engine fresh — a relaunch always reflects engine changes.
+  if [ -f "$o/app" ] && [ -n "$(find "$SRC" -name '*.pas' -newer "$o/app" 2>/dev/null | head -1)" ]; then
+    rm -f "$o"/*.ppu "$o"/*.o 2>/dev/null || true
+  fi
   extra=""
   [ -n "$inlined" ] && extra="-Fu$inlined"
   [ -n "$paged" ] && extra="$extra -Fu$paged"
