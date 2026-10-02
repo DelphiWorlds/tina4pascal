@@ -985,8 +985,12 @@ begin
         Rule.Selector := TrimmedSel;
         Rule.MediaCond := MediaCond;   // '' unless inside an @media block
 
-        // Check if this is a :root or * selector (global custom properties)
-        IsGlobalScope := SameText(TrimmedSel, ':root') or (TrimmedSel = '*');
+        // Check if this is a :root or * selector (global custom properties).
+        // A :root qualified by a pseudo/attribute (e.g. `:root:not([data-theme])`
+        // in a prefers-color-scheme @media block) still targets the root, so its
+        // custom props are global too — otherwise theme var swaps are silently lost.
+        IsGlobalScope := SameText(TrimmedSel, ':root') or (TrimmedSel = '*')
+          or TrimmedSel.ToLower.StartsWith(':root:') or TrimmedSel.ToLower.StartsWith(':root[');
 
         for D in Decls do
         begin

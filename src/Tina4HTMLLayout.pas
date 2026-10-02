@@ -2697,6 +2697,7 @@ var
   ridx: Integer;
   runText: string;   // accumulates a contiguous text run → anonymous flex item
   mL, mR, mT, mB, availInner, ew, eh, mnh: Single;
+  savedCH, ehC: Single;   // save/restore FContainingH across this flex container
   edgeL, edgeT, edgeR, edgeB, contentX, contentY, contentW, contentH: Single;
   isCol: Boolean;
   dir, jc, ai, ia: string;
@@ -2745,6 +2746,18 @@ begin
   edgeB := st.BorderWidths.Bottom + st.Padding.Bottom;
   contentX := box.X + edgeL; contentY := box.Y + edgeT;
   contentW := box.W - edgeL - edgeR;
+
+  // Expose this flex container's own definite content height as the containing
+  // block, so flex items resolve height:NN% against it (CSS: the flex container
+  // is their containing block). Without this a bar at height:35% in a fixed-
+  // height chart resolved against 0. Left unchanged when the height is auto.
+  savedCH := FContainingH;
+  ehC := ResolveSize(st.ExplicitHeight, FContainingH);
+  if ehC >= 0 then
+  begin
+    if SameText(st.BoxSizing, 'border-box') then FContainingH := Max(0, ehC - edgeT - edgeB)
+    else FContainingH := ehC;
+  end;
 
   dir := LowerCase(st.FlexDirection); if dir = '' then dir := 'row';
   isCol := (dir = 'column') or (dir = 'column-reverse');
@@ -3349,6 +3362,7 @@ begin
     end;
     if natW + edgeL + edgeR > box.NaturalW then box.NaturalW := natW + edgeL + edgeR;
   finally
+    FContainingH := savedCH;   // restore on every path (incl. the wrap early-Exits)
     // out-of-flow children: positioned against this flex box's padding box now
     // that it is sized (they never took part in the flex flow above). Done in the
     // finally so every early-Exit branch (column-/row-wrap) still places them.

@@ -19,21 +19,18 @@ uses
   SysUtils,
   Tina4HTMLDom,    // THTMLTag
   Tina4Events,     // RegisterAction
-  Tina4Builtins;   // BuiltinsRoot, FindById, SetElementText, BuiltinsDirty
+  Tina4Builtins,   // BuiltinsRoot, FindById, SetElementText, BuiltinsDirty
+  Tina4Interact;   // TinaSetColorScheme — the engine-native dark/light switch
 
-{ Toggle the whole UI between dark and light by flipping the data-theme attribute
-  on <body id="app">. tina4pascal.css defines --tina-* tokens for [data-theme=light]
-  (and dark on :root), so every surface re-themes from the one attribute. }
+var Dark: Boolean = True;   // dashboard opens dark (the brand default)
+
+{ Toggle the whole UI between dark and light. tina4pascal.css puts the dark tokens
+  on :root and the light tokens in a prefers-color-scheme:light @media block, which
+  the engine drives from TinaSetColorScheme — so one call re-themes every surface. }
 procedure ToggleTheme(const Args: string);
-var b: THTMLTag;
 begin
-  b := FindById(BuiltinsRoot, 'app');
-  if b = nil then Exit;
-  if SameText(b.GetAttribute('data-theme'), 'light') then
-    b.Attributes.Remove('data-theme')               // back to the dark :root default
-  else
-    b.Attributes.AddOrSetValue('data-theme', 'light');
-  BuiltinsDirty := True;                             // re-cascade + repaint
+  Dark := not Dark;
+  TinaSetColorScheme(Dark);   // flips @media(prefers-color-scheme) + re-cascades
 end;
 
 var Deploys: Integer = 0;
@@ -56,4 +53,5 @@ end;
 
 initialization
   RegisterAppActions;
+  TinaSetColorScheme(Dark);   // open in dark regardless of the host OS appearance
 end.
