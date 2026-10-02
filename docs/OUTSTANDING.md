@@ -141,8 +141,11 @@ low-quality hack.
 
 ## D. Capture stack (per-shell)
 - **[done] `<recorder>`** — macOS ✅, iOS ✅, Android ✅ (issue #1 E3; mic →
-  `.m4a`, iOS+Android confirmed on device via `examples/recorder`). Remaining
-  nuance: surfacing live `AudioLevel` to app logic on mobile (the E1 meter bridge).
+  `.m4a`, iOS+Android confirmed on device via `examples/recorder`).
+- **[done] E1 live mic meter** — `TinaSetAudioLevel(0..1)` drives any `[data-vu]`
+  element (a VU bar with no app code). Shells push it each frame while armed (iOS
+  `AVAudioRecorder` metering; Android `getMaxAmplitude` poll → JNI). **Android VU
+  confirmed on device**; iOS redeployed. macOS meter session already existed.
 - **[done] E4 background capture** — survive screen-off/backgrounded: iOS
   `UIBackgroundModes[audio]`; Android `Tina4CaptureService`
   (`foregroundServiceType=microphone`) started/stopped with the recorder.
