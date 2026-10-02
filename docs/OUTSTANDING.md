@@ -140,12 +140,16 @@ low-quality hack.
 - **[S] `<video>` (macOS)** — `AVPlayerView` loop TODO + GUI-run verify pending.
 
 ## D. Capture stack (per-shell)
-- **[M] `<recorder>`** — macOS ✅; iOS (`AVAudioRecorder`+`AVAudioSession`) /
-  Android (`MediaRecorder`+`RECORD_AUDIO`) shell overrides are the follow-up.
-- **[M] `<camera-view>` preview** — core box + contract + engine enumeration
+- **[done] `<recorder>`** — macOS ✅, iOS ✅, Android ✅ (issue #1 E3; mic →
+  `.m4a`, iOS+Android confirmed on device via `examples/recorder`). Remaining
+  nuance: surfacing live `AudioLevel` to app logic on mobile (the E1 meter bridge).
+- **[done] `<camera-view>` preview** — core box + contract + engine enumeration
   (embed kind 4) done; **iOS + Android native preview done + confirmed on device**
-  (iOS `Tina4View.m` `syncCamera:`; Android `Tina4Camera.java`). Remaining: macOS
-  native preview, and `GrabCameraFrame` (JPEG) per-shell.
+  (iOS `Tina4View.m` `syncCamera:`; Android `Tina4Camera.java`). This is **full
+  parity with `<barcode-scanner>`** (both are live camera on iOS+Android; neither
+  has a desktop live preview). Future (shared with the scanner, not an E2 gap):
+  macOS/desktop live preview, and `GrabCameraFrame` (JPEG) for the streaming
+  follow-on.
 - **[M] `<barcode-scanner>` camera** — decode done (libzbar, desktop); camera
   preview/capture per-shell (❌).
 
