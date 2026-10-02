@@ -1,0 +1,6 @@
+{
+  "name": "Dashboard",
+  "bundleId": "com.tina4.dashboard",
+  "main": "main.pas",
+  "appUnits": ["AppLogic"]
+}
