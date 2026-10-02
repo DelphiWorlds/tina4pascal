@@ -190,10 +190,28 @@ cmd_setup() {
   case "$what" in
     fpc)     setup_fpc ;;
     android) setup_android ;;
-    ios)     setup_ios ;;
+    ios)     if [ "${2:-}" = "--tunnel-nopasswd" ]; then setup_ios_nopasswd; else setup_ios; fi ;;
     all)     setup_fpc; setup_android; setup_ios ;;
     *) die "setup: unknown component '$what' (fpc | android | ios | all)" ;;
   esac
+}
+
+# Opt-in: let `remote start-tunnel` run under sudo with NO password prompt, so iOS
+# screenshots/logs never ask again (even across reboots). Installs a narrowly-
+# scoped /etc/sudoers.d rule for THIS user and the pymobiledevice3 tunnel command
+# only, validated with visudo before install. One sudo prompt to write it; none
+# after. Remove it with: sudo rm /etc/sudoers.d/tina4-ios-tunnel
+setup_ios_nopasswd() {
+  _pmd="$(command -v pymobiledevice3 2>/dev/null || echo "$HOME/.local/bin/pymobiledevice3")"
+  [ -x "$_pmd" ] || die "pymobiledevice3 not installed — run: tina4pascal setup ios"
+  _rule="$(id -un) ALL=(root) NOPASSWD: $_pmd remote start-tunnel *"
+  _tmp="$(mktemp)"; printf '%s\n' "$_rule" > "$_tmp"
+  visudo -cf "$_tmp" >/dev/null 2>&1 || { rm -f "$_tmp"; die "generated sudoers rule failed validation (not installed)"; }
+  say "→ installing a NOPASSWD sudoers rule for the iOS tunnel (one sudo prompt)…"
+  say "  ${D}$_rule${Z}"
+  sudo install -m 0440 "$_tmp" /etc/sudoers.d/tina4-ios-tunnel || { rm -f "$_tmp"; die "could not write /etc/sudoers.d/tina4-ios-tunnel"; }
+  rm -f "$_tmp"
+  ok "done — iOS screenshots/logs no longer prompt. Remove with: sudo rm /etc/sudoers.d/tina4-ios-tunnel"
 }
 
 # iOS build + on-device debug tooling. Xcode itself is a manual install; this
@@ -1790,12 +1808,14 @@ cmd_emulator() {
   esac
 }
 
-# ---- iOS RemoteXPC tunnel (no root) -----------------------------------------
+# ---- iOS RemoteXPC tunnel ---------------------------------------------------
 # iOS 17+ developer services (screenshot, syslog) run over a RemoteXPC tunnel.
-# `pymobiledevice3 remote tunneld` (the daemon) needs ROOT; `remote start-tunnel`
-# uses Apple's NATIVE tunnel on macOS with NO root. We keep one background
-# start-tunnel alive and cache its RSD addr/port so repeated screenshot/logs
-# calls reuse it. State lives under $TINA4_HOME (default ~/.tina4).
+# `remote start-tunnel` can use Apple's NATIVE tunnel with NO root on some macOS
+# / pymobiledevice3 combos, but newer ones need ROOT to create the utun iface.
+# We try no-root first, then fall back to sudo (one prompt), keep the tunnel
+# alive, and cache its RSD addr/port so every later screenshot/logs call reuses
+# it with no further prompt. For a ZERO-prompt setup see `tina4pascal setup ios
+# --tunnel-nopasswd`. State lives under $TINA4_HOME (default ~/.tina4).
 TINA4_STATE="${TINA4_HOME:-$HOME/.tina4}"
 ios_tunnel_rsd() {  # echo "<addr> <port>" if a cached tunnel is still alive, else nothing (always exits 0 — set -e safe)
   _pf="$TINA4_STATE/ios-tunnel.pid"; _rf="$TINA4_STATE/ios-tunnel.rsd"
@@ -1814,22 +1834,37 @@ ios_ensure_tunnel() {  # prints "<addr> <port>" to STDOUT; progress/errors to ST
   if ! { [ -x "$PMD3" ] || command -v pymobiledevice3 >/dev/null 2>&1; }; then
     echo "pymobiledevice3 missing — run: tina4pascal setup ios" >&2; return 1
   fi
-  mkdir -p "$TINA4_STATE"; _log="$TINA4_STATE/ios-tunnel.log"; : > "$_log"
-  say "→ starting iOS tunnel (remote start-tunnel, no root)…" >&2
-  nohup "$PMD3" remote start-tunnel >"$_log" 2>&1 &
-  echo $! > "$TINA4_STATE/ios-tunnel.pid"
-  _i=0
-  while [ "$_i" -lt 60 ]; do
-    _addr="$(awk '/RSD Address:/{print $NF; exit}' "$_log")"
-    _port="$(awk '/RSD Port:/{print $NF; exit}' "$_log")"
-    if [ -n "$_addr" ] && [ -n "$_port" ]; then
-      printf '%s %s' "$_addr" "$_port" > "$TINA4_STATE/ios-tunnel.rsd"
-      printf '%s %s' "$_addr" "$_port"
-      return 0
+  _pmd="$PMD3"; [ -x "$_pmd" ] || _pmd="$(command -v pymobiledevice3)"
+  mkdir -p "$TINA4_STATE"; _log="$TINA4_STATE/ios-tunnel.log"
+  # Attempt 1: no root. Attempt 2 (if that logs a root error): sudo, which prompts
+  # once in the terminal (or runs silently under a NOPASSWD sudoers rule).
+  for _mode in plain sudo; do
+    : > "$_log"
+    if [ "$_mode" = plain ]; then
+      say "→ starting iOS tunnel (remote start-tunnel, no root)…" >&2
+      nohup "$_pmd" remote start-tunnel >"$_log" 2>&1 &
+    else
+      say "→ tunnel needs root — starting with sudo (enter your password if asked)…" >&2
+      nohup sudo "$_pmd" remote start-tunnel >"$_log" 2>&1 &
     fi
-    sleep 0.5; _i=$((_i + 1))
+    echo $! > "$TINA4_STATE/ios-tunnel.pid"
+    _i=0
+    while [ "$_i" -lt 60 ]; do
+      _addr="$(awk '/RSD Address:/{print $NF; exit}' "$_log")"
+      _port="$(awk '/RSD Port:/{print $NF; exit}' "$_log")"
+      if [ -n "$_addr" ] && [ -n "$_port" ]; then
+        printf '%s %s' "$_addr" "$_port" > "$TINA4_STATE/ios-tunnel.rsd"
+        printf '%s %s' "$_addr" "$_port"
+        return 0
+      fi
+      # bail early to the sudo attempt the moment the root error shows
+      if [ "$_mode" = plain ] && grep -qi 'root privileges' "$_log"; then break; fi
+      sleep 0.5; _i=$((_i + 1))
+    done
+    kill "$(cat "$TINA4_STATE/ios-tunnel.pid" 2>/dev/null || true)" 2>/dev/null || true
+    # only advance to the sudo attempt if the plain one actually needed root
+    grep -qi 'root privileges' "$_log" || break
   done
-  kill "$(cat "$TINA4_STATE/ios-tunnel.pid" 2>/dev/null || true)" 2>/dev/null || true
   rm -f "$TINA4_STATE/ios-tunnel.pid" "$TINA4_STATE/ios-tunnel.rsd"
   echo "iOS tunnel did not come up — see $_log (iPhone paired + unlocked?)" >&2; return 1
 }
@@ -2072,7 +2107,8 @@ ${B}debug loop${Z}
 
 ${B}drive the app${Z}  (the device-automation the IDE builds on)
   screenshot <target> [out.png]   grab the app screen  (android · ios · macos)
-  ios-tunnel [start|status|stop]  manage the no-root iOS RemoteXPC tunnel
+  ios-tunnel [start|status|stop]  manage the iOS RemoteXPC tunnel (sudo if needed;
+                                  `setup ios --tunnel-nopasswd` for zero prompts)
                                   (auto-started by screenshot/logs ios)
   tap <target> X Y                click/tap at screen coords
   swipe <target> X1 Y1 X2 Y2 [ms] scroll / drag
