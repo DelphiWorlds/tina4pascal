@@ -143,6 +143,11 @@ low-quality hack.
 - **[done] `<recorder>`** — macOS ✅, iOS ✅, Android ✅ (issue #1 E3; mic →
   `.m4a`, iOS+Android confirmed on device via `examples/recorder`). Remaining
   nuance: surfacing live `AudioLevel` to app logic on mobile (the E1 meter bridge).
+- **[done] E4 background capture** — survive screen-off/backgrounded: iOS
+  `UIBackgroundModes[audio]`; Android `Tina4CaptureService`
+  (`foregroundServiceType=microphone`) started/stopped with the recorder.
+  **Android verified on device** (recorded through a 5s screen-lock, service stayed
+  foreground, clip saved); iOS redeployed for locked-record confirmation.
 - **[done] `<camera-view>` preview** — core box + contract + engine enumeration
   (embed kind 4) done; **iOS + Android native preview done + confirmed on device**
   (iOS `Tina4View.m` `syncCamera:`; Android `Tina4Camera.java`). This is **full
