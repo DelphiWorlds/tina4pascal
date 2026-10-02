@@ -3080,6 +3080,13 @@ begin
   begin
     Result := StrToFloatDef(Str.Replace('em', ''), 0) * EmSize;
   end
+  // ch (advance of '0') and ex (x-height) ≈ half an em — we don't measure the
+  // font here, so use the standard 0.5em approximation (prevents e.g. a
+  // `max-width:65ch` from mis-parsing to 0 and collapsing the element).
+  else if Str.EndsWith('ch') then
+    Result := StrToFloatDef(Str.Replace('ch', ''), 0) * EmSize * 0.5
+  else if Str.EndsWith('ex') then
+    Result := StrToFloatDef(Str.Replace('ex', ''), 0) * EmSize * 0.5
   // viewport units — resolve against the ICB set by SetCalcContext (0 before then)
   else if Str.EndsWith('vmin') then
     Result := StrToFloatDef(Str.Replace('vmin', ''), 0) * Min(GCalcVpW, GCalcVpH) / 100
