@@ -2698,6 +2698,7 @@ var
   runText: string;   // accumulates a contiguous text run → anonymous flex item
   mL, mR, mT, mB, availInner, ew, eh, mnh: Single;
   savedCH, ehC: Single;   // save/restore FContainingH across this flex container
+  relDX, relDY: Single;   // position:relative offset applied to a flex item
   edgeL, edgeT, edgeR, edgeB, contentX, contentY, contentW, contentH: Single;
   isCol: Boolean;
   dir, jc, ai, ia: string;
@@ -3373,6 +3374,19 @@ begin
        and ((jc = 'flex-start') or (jc = 'start')) and (sumGrow = 0)
        and (natW + edgeL + edgeR < box.W) then
       box.W := natW + edgeL + edgeR;
+    // position:relative on a flex item — offset it visually (top/left/right/bottom)
+    // after flex placement, like the block path does. Lets e.g. a badge's dot be
+    // nudged to the text's optical centre. Does not change the space it reserved.
+    for i := 0 to items.Count - 1 do
+      if (items[i] <> nil) and SameText(items[i].Style.CSSPosition, 'relative') then
+      begin
+        relDX := 0; relDY := 0;
+        if items[i].Style.CSSLeft > -9998 then relDX := items[i].Style.CSSLeft
+        else if items[i].Style.CSSRight > -9998 then relDX := -items[i].Style.CSSRight;
+        if items[i].Style.CSSTop > -9998 then relDY := items[i].Style.CSSTop
+        else if items[i].Style.CSSBottom > -9998 then relDY := -items[i].Style.CSSBottom;
+        if (relDX <> 0) or (relDY <> 0) then ShiftBoxTree(items[i], relDX, relDY);
+      end;
   finally
     FContainingH := savedCH;   // restore on every path (incl. the wrap early-Exits)
     // out-of-flow children: positioned against this flex box's padding box now
