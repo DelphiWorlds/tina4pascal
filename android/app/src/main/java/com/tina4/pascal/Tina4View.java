@@ -65,6 +65,10 @@ public class Tina4View extends View implements Runnable,
     private native int     nativeEmbedKind(int index); // 0 = video · 1 = audio · 2 = barcode-scanner
     private native String  nativeEmbedFormats(int index);          // scanner symbologies
     private native int     nativeScanResult(int index, String value, String format); // report a decode
+    private native void    nativeSetAudioLevel(float level);        // live mic level 0..1 → [data-vu]
+
+    /** E1: push the live mic level (0..1) into the engine and repaint the VU meter. */
+    public void pushAudioLevel(float level) { nativeSetAudioLevel(level); invalidate(); }
 
     /** Called by MainActivity once the system file picker returns a name. */
     void onFilePicked(String name) { nativeSetFile(name); invalidate(); }

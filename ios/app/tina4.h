@@ -32,6 +32,7 @@ int  tina4_focus_next(void);
 void tina4_set_file(const char *name);
 void tina4_set_photo(const char *path);
 void tina4_set_recording(const char *path);   // hand back the recorded audio ('' = failed)
+void tina4_set_audio_level(float level);       // live mic level 0..1 → drives [data-vu]
 
 // Engine-drawn <audio controls>: on a TINA_AUDIO_TOGGLE touch, read the source
 // URL + which way the tap toggled, drive an AVAudioPlayer, and push the elapsed

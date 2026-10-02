@@ -112,6 +112,15 @@
     // OFF the drawRect pass — mutating the layer tree (addSublayer) inside
     // drawRect is unreliable — so hop to the next main-loop turn.
     dispatch_async(dispatch_get_main_queue(), ^{ [self syncVideos:s]; [self syncScanner:s]; [self syncCamera:s]; });
+    // E1: while recording, push the live mic level to [data-vu] and keep repainting
+    if (self.audioRecorder) {
+        [self.audioRecorder updateMeters];
+        float db = [self.audioRecorder averagePowerForChannel:0];  // ~ -160 (silence) .. 0 (max)
+        float lvl = (db + 50.0f) / 50.0f;                          // map -50..0 dB → 0..1
+        if (lvl < 0) lvl = 0; else if (lvl > 1) lvl = 1;
+        tina4_set_audio_level(lvl);
+        [self setNeedsDisplay];                                    // keep the meter live
+    }
     // keep animating on-screen time-driven content (<lottie>) without needing a
     // fling — the display link paces itself and -tick repaints only the animated
     // region (setNeedsDisplayInRect).
@@ -627,6 +636,7 @@
             self.audioRecorder = [[AVAudioRecorder alloc]
                 initWithURL:[NSURL fileURLWithPath:self.audioRecPath]
                 settings:settings error:&err];
+            self.audioRecorder.meteringEnabled = YES;   // E1: feed [data-vu] a live level
             if (!self.audioRecorder || err || ![self.audioRecorder record]) {
                 self.audioRecorder = nil;
                 tina4_set_recording("");   // failed → roll the <recorder> back to idle

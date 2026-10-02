@@ -113,6 +113,14 @@ procedure TinaSetPhoto(const Path: string);
   control simply disarms. The host calls this after StopAudioCapture returns. }
 procedure TinaSetRecording(const Path: string);
 
+{ Live mic input level (RMS 0.0..1.0), pushed by the shell each frame while a mic
+  is armed (a <recorder> capture or StartAudioMeter). The engine stores it and
+  drives every element carrying a `data-vu` attribute — their `width` is set to
+  level% — so a page gets a live VU meter with no app code: just
+  `<div data-vu style="height:12px;background:#22c55e"></div>` inside a track.
+  The E1 meter made visible on mobile (shells call the C/JNI bridge to this). }
+procedure TinaSetAudioLevel(L: Single);
+
 { <audio controls> playback — the engine draws the control (play/pause + progress)
   and, on a tap, returns TINA_AUDIO_TOGGLE. The shell then reads the source URL to
   play/pause with TinaAudioSrc, checks TinaAudioWantPlay to know which way the tap
@@ -241,6 +249,7 @@ var
   GDensity: Single = 1;
   GViewH: Single = 0;           // CSS px
   GScrollY: Single = 0;         // CSS px
+  GAudioLevel: Single = 0;      // live mic RMS 0..1, pushed by the shell (data-vu)
   // touch + momentum (all CSS px). A gesture locks onto GDragBox on touch-down
   // (an inner overflow scroller, or nil = the page) and flings on both axes.
   GDownX, GDownY, GLastX, GLastY: Single;
@@ -2265,6 +2274,30 @@ begin
     GFileTag := nil;
   end;
   GLayoutDirty := True;
+end;
+
+{ Recursively set the width of every [data-vu] element to L (0..1) as a percent. }
+procedure ApplyVuLevel(Node: THTMLTag; L: Single);
+var c: THTMLTag; w: Integer;
+begin
+  if Node = nil then Exit;
+  if Node.HasAttribute('data-vu') then
+  begin
+    w := Round(L * 100);
+    if w < 0 then w := 0 else if w > 100 then w := 100;
+    Node.Style.AddOrSetValue('width', IntToStr(w) + '%');
+  end;
+  for c in Node.Children do ApplyVuLevel(c, L);
+end;
+
+procedure TinaSetAudioLevel(L: Single);
+begin
+  GAudioLevel := L;
+  if GParser <> nil then
+  begin
+    ApplyVuLevel(GParser.Root, L);
+    GLayoutDirty := True;
+  end;
 end;
 
 { Effective source URL of an <audio> tag: its `src`, else the first <source src>. }
