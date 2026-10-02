@@ -13,6 +13,14 @@ ROOT="$(cd "$SELF/.." && pwd)"
 SRC="$ROOT/src"
 BUILD="$ROOT/build"
 
+# Compiled units NEVER belong in src/ — they go to a build/unit-output dir via -FU.
+# But a stray in-place `fpc` (an IDE, an old script, a manual compile) can drop a
+# .ppu/.o beside a .pas, and because every compile passes -Fu"$SRC", FPC then
+# REUSES that stale unit instead of recompiling the edited source — so the engine
+# silently renders old code no matter how often you rebuild. Wipe them before any
+# engine compile; src/ is source-only, so this can only remove shadowing junk.
+clean_src_units() { rm -f "$SRC"/*.ppu "$SRC"/*.o 2>/dev/null || true; }
+
 # Per-machine toolchain cache: one place `setup` downloads everything into, shared
 # by every project and never committed. A project pins tool VERSIONS (tina4.json);
 # the CLI resolves the PATHS here so `git clone && tina4pascal setup && build` works
@@ -577,6 +585,7 @@ build_project() {
   # Weld any pages/ into the binary (main.pas opts in with `uses Tina4EmbeddedPages`)
   bppaged="$(prepare_pages "$PWD")"
   [ -n "$bppaged" ] && extra="$extra -Fu$bppaged"
+  clean_src_units   # never let a stray src/*.ppu shadow an engine edit
   say "${D}fpc $opts $flags $main${Z}"
   # project unit dirs: root + src, src/app, src/services (the same set the mobile
   # staging adds, so a unit like src/AppLogic.pas is found on every target);
@@ -1278,6 +1287,7 @@ EOF
 cmd_test() {
   need_fpc
   fail=0
+  clean_src_units   # never let a stray src/*.ppu shadow an engine edit
   for t in dom highlight codearea flexrebuild includes qr svg picture services http docs frond pseudo media webp pdf scanner barcode crypto auth rbacui authflow secrets ssoflow; do
     [ -f "$ROOT/tests/test_$t.pas" ] || continue
     o="$BUILD/test/$t"; mkdir -p "$o"
@@ -1306,6 +1316,7 @@ cmd_run() {
 cmd_macos() {
   need_fpc
   o="$BUILD/macos-app"; mkdir -p "$o"
+  clean_src_units   # never let a stray src/*.ppu shadow an engine edit
   say "${D}fpc examples/macos/main.pas${Z}"
   "$FPC" -Mdelphi -O2 -Xs -Fu"$SRC" -FE"$o" -FU"$o" -o"$o/Tina4Pascal" \
     "$ROOT/examples/macos/main.pas" 2>&1 | grep -Ei "error|fatal" && die "build failed" || true
@@ -1389,11 +1400,13 @@ cmd_dev() {
   # project main.pas opts in with `uses Tina4EmbeddedPages;` (auto on mobile).
   paged="$(prepare_pages "$d")"
   o="$BUILD/dev"; mkdir -p "$o"
-  # The dev unit cache ($BUILD/dev) is shared across runs, so an edited engine
-  # unit under src/ can leave a stale .ppu and the app renders OLD code. If any
-  # engine source is newer than the last built binary, drop the cached units so
-  # FPC recompiles the engine fresh — a relaunch always reflects engine changes.
-  if [ -f "$o/app" ] && [ -n "$(find "$SRC" -name '*.pas' -newer "$o/app" 2>/dev/null | head -1)" ]; then
+  clean_src_units   # never let a stray src/*.ppu shadow an engine edit
+  # The dev unit cache ($BUILD/dev) is shared across runs. Compare edited engine
+  # sources against a CACHED ENGINE UNIT (not the relinked app binary, which is
+  # always newer than src and so never triggered) — if any .pas is newer, drop the
+  # cached units so FPC recompiles the engine fresh and a relaunch shows the change.
+  ref="$o/tina4htmllayout.ppu"
+  if [ -f "$ref" ] && [ -n "$(find "$SRC" -name '*.pas' -newer "$ref" 2>/dev/null | head -1)" ]; then
     rm -f "$o"/*.ppu "$o"/*.o 2>/dev/null || true
   fi
   extra=""
