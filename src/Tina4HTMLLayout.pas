@@ -3361,6 +3361,18 @@ begin
       natW := natW + flexGap * Max(0, items.Count - 1);
     end;
     if natW + edgeL + edgeR > box.NaturalW then box.NaturalW := natW + edgeL + edgeR;
+    // inline-flex / width:fit-content with an AUTO main size shrinks to its content
+    // (CSS), unlike block-level `display:flex` which fills the container. When the
+    // row is left-packed (justify-content:flex-start) and nothing flex-grew, the
+    // items already sit at their content positions, so trimming box.W to the
+    // content width is safe and leaves them in place. Fixes e.g. a `.tina4-badge`
+    // chip stretching across a table cell instead of hugging its label.
+    if (ew < 0) and (not isCol)
+       and ((LowerCase(st.Display) = 'inline-flex')
+            or ((st.ExplicitWidth < -2.5) and (st.ExplicitWidth > -3.5)))
+       and ((jc = 'flex-start') or (jc = 'start')) and (sumGrow = 0)
+       and (natW + edgeL + edgeR < box.W) then
+      box.W := natW + edgeL + edgeR;
   finally
     FContainingH := savedCH;   // restore on every path (incl. the wrap early-Exits)
     // out-of-flow children: positioned against this flex box's padding box now
