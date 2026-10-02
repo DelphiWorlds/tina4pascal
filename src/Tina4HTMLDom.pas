@@ -4258,7 +4258,8 @@ begin
     Style.Color := ParseColor(Temp);
   if Decls.TryGetValue('background-color', Temp) and not ShouldSkip(Temp) then
   begin
-    Style.BackgroundColor := ParseColor(Temp);
+    if SameText(Trim(Temp), 'currentcolor') then Style.BackgroundColor := Style.Color
+    else Style.BackgroundColor := ParseColor(Temp);
     Style.BackgroundExplicit := True;   // author set it — controls keep it (even transparent)
   end;
   if Decls.TryGetValue('background', Temp) and not ShouldSkip(Temp) then
@@ -4301,6 +4302,8 @@ begin
           Style.BackgroundColor := ParseColor(BgRest);
       end;
     end
+    else if SameText(Trim(BgVal), 'currentcolor') then
+      Style.BackgroundColor := Style.Color   // `background:currentColor` → the text colour
     else
       // a plain solid colour
       Style.BackgroundColor := ParseColor(BgVal);
