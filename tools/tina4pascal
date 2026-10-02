@@ -1349,6 +1349,8 @@ cmd_new() {
   mkdir -p "$name/src"
   cp "$ROOT/examples/starter/app.html" "$name/app.html"
   cp "$ROOT/examples/starter/src/AppLogic.pas" "$name/src/AppLogic.pas"
+  # default stylesheet — bundled in assets/ so it ships into the mobile app too
+  [ -d "$ROOT/examples/starter/assets" ] && { mkdir -p "$name/assets"; cp -R "$ROOT/examples/starter/assets/." "$name/assets/"; }
   sed "s/My Tina4 App/$name/g" "$ROOT/examples/starter/main.pas" > "$name/main.pas"
   sed -e "s/My Tina4 App/$name/g" -e "s#com\.tina4\.myapp#$bid#" \
       "$ROOT/examples/starter/tina4.json" > "$name/tina4.json"

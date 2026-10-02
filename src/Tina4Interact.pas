@@ -1167,7 +1167,7 @@ begin
 end;
 
 procedure ParseDoc(W: Single);
-var i: Integer; GImportSL: TStringList;
+var i: Integer; GImportSL: TStringList; linkHref, linkCss: string;
 begin
   BlurAll;
   GActiveTag := nil; GHoverTag := nil;   // old DOM about to be freed — drop refs
@@ -1181,6 +1181,24 @@ begin
   // registered custom elements' default CSS goes in FIRST (UA-like) so author
   // rules override it
   if ElementsDefaultCSS <> '' then GSheet.AddCSS(ElementsDefaultCSS);
+  // <link rel="stylesheet" href="…">: load each as a BASE sheet (before the page's
+  // own <style> so author rules win). Resolved like any other local resource —
+  // embedded page store → shell asset/bundle base (ReadLocalFile) → disk — so a
+  // default stylesheet (e.g. assets/tina4pascal.css) applies on desktop AND mobile.
+  for i := 0 to GParser.LinkHrefs.Count - 1 do
+  begin
+    linkHref := GParser.LinkHrefs[i]; linkCss := '';
+    if TryGetEmbeddedPage(linkHref, linkCss) then
+      GSheet.AddCSS(linkCss)
+    else if (GCanvas <> nil) and GCanvas.ReadLocalFile(linkHref, linkCss) then
+      GSheet.AddCSS(linkCss)
+    else if FileExists(linkHref) then
+    begin
+      GImportSL := TStringList.Create;
+      try GImportSL.LoadFromFile(linkHref); GSheet.AddCSS(GImportSL.Text);
+      finally GImportSL.Free; end;
+    end;
+  end;
   for i := 0 to GParser.StyleBlocks.Count - 1 do
     GSheet.AddCSS(GParser.StyleBlocks[i]);
   // @import: best-effort local-file load (drain by index → nested imports too).
