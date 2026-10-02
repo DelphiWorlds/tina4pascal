@@ -1395,7 +1395,35 @@ cmd_dev() {
   # shellcheck disable=SC2086
   "$FPC" -Mdelphi -O2 -Xs -Fu"$SRC" $extra -FE"$o" -FU"$o" -o"$o/app" "$main" 2>&1 \
     | grep -Ei "error|fatal" && die "build failed" || true
-  ( cd "$d" && exec "$o/app" )   # runs from the app folder (app.html + localStore)
+  # Wrap the binary in a minimal .app so macOS shows the project NAME + ICON in the
+  # Dock instead of a generic "exec". We still exec the inner Mach-O directly (not
+  # `open`) from the app folder, so the cwd stays the project dir — app.html,
+  # assets/ and localStore resolve exactly as before — while LaunchServices reads
+  # the enclosing bundle for its identity. Fixes the "exec" Dock icon/name.
+  dname="$(cd "$d" && jget name "$(basename "$(pwd)")")"
+  dbid="$(cd "$d" && jget bundleId "com.tina4.$dname")"
+  dapp="$o/$dname.app"; rm -rf "$dapp"
+  mkdir -p "$dapp/Contents/MacOS" "$dapp/Contents/Resources"
+  cp "$o/app" "$dapp/Contents/MacOS/$dname"
+  if [ -f "$d/assets/icon.icns" ]; then cp "$d/assets/icon.icns" "$dapp/Contents/Resources/AppIcon.icns"
+  elif [ -f "$ROOT/branding/AppIcon.icns" ]; then cp "$ROOT/branding/AppIcon.icns" "$dapp/Contents/Resources/AppIcon.icns"; fi
+  cat > "$dapp/Contents/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleExecutable</key><string>$dname</string>
+  <key>CFBundleIdentifier</key><string>$dbid</string>
+  <key>CFBundleName</key><string>$dname</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>1.0</string>
+  <key>NSHighResolutionCapable</key><true/>
+  <key>LSMinimumSystemVersion</key><string>10.13</string>
+  <key>NSMicrophoneUsageDescription</key><string>Record audio from a &lt;recorder&gt; element.</string>
+  <key>NSCameraUsageDescription</key><string>Capture photos and scan codes from &lt;camera&gt; / scanner elements.</string>
+</dict></plist>
+PLIST
+  ( cd "$d" && exec "$dapp/Contents/MacOS/$dname" )   # app folder = cwd (app.html + localStore)
 }
 
 cmd_snapshot() {
@@ -1671,15 +1699,24 @@ cmd_ios() {
 #  the app before a screenshot.)
 cmd_launch() {
   plat="${1:-ios}"
+  # Inside a project, target the project's OWN bundle id (tina4.json "bundleId",
+  # default com.tina4.<name>) — not the reference app. Outside, use the defaults.
+  _pbid=""
+  if is_project 2>/dev/null; then
+    _pname="$(jget name "$(basename "$PWD")")"
+    _pbid="$(jget bundleId "com.tina4.$_pname")"
+  fi
   case "$plat" in
     ios)
       udid="$(ios_udid)"; [ -n "$udid" ] || die "no iOS device attached (idevice_id / devicectl)"
-      xcrun devicectl device process launch --terminate-existing --device "$udid" "$IOS_BUNDLE" >/dev/null 2>&1 \
+      _b="${_pbid:-$IOS_BUNDLE}"
+      xcrun devicectl device process launch --terminate-existing --device "$udid" "$_b" >/dev/null 2>&1 \
         || die "launch failed (installed? iPhone unlocked?)"
-      ok "launched $IOS_BUNDLE on device" ;;
+      ok "launched $_b on device" ;;
     android)
-      adb shell monkey -p "$ANDROID_PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 \
-        && ok "launched $ANDROID_PKG" || die "launch failed (installed? emulator/device up?)" ;;
+      _b="${_pbid:-$ANDROID_PKG}"
+      adb shell monkey -p "$_b" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 \
+        && ok "launched $_b" || die "launch failed (installed? emulator/device up?)" ;;
     macos)
       open "$ROOT/examples/htmlviewer/htmlviewer" 2>/dev/null && ok "launched macOS viewer" || die "build macos first" ;;
     *) die "launch: unsupported target '$plat' (ios|android|macos)" ;;
