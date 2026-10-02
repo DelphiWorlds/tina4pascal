@@ -145,6 +145,7 @@ public class MainActivity extends Activity {
             recorder.setOutputFile(recPath);
             recorder.prepare();
             recorder.start();
+            Tina4CaptureService.start(this);   // E4: keep mic alive while backgrounded/locked
         } catch (Exception e) {
             if (recorder != null) { try { recorder.release(); } catch (Exception ignore) {} recorder = null; }
             recPath = null;
@@ -154,6 +155,7 @@ public class MainActivity extends Activity {
 
     /** <recorder> tapped while armed: stop + hand the file back. */
     void stopRecording() {
+        Tina4CaptureService.stop(this);        // E4: release the foreground slot
         String path = "";
         if (recorder != null) {
             try { recorder.stop(); path = recPath != null ? recPath : ""; }
