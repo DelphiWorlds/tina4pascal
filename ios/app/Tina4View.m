@@ -42,6 +42,7 @@
 // native <recorder>: mic capture to an AAC .m4a in the temp dir
 @property (strong, nonatomic) AVAudioRecorder *audioRecorder;
 @property (strong, nonatomic) NSString *audioRecPath;
+@property (strong, nonatomic) NSTimer *levelTimer;   // E1: drives the live VU meter while recording
 // engine-drawn <audio controls>: one AVAudioPlayer for the clip the user toggled,
 // with a display link pushing the elapsed fraction back so the bar advances.
 @property (strong, nonatomic) AVAudioPlayer *audioPlayer;
@@ -112,15 +113,6 @@
     // OFF the drawRect pass — mutating the layer tree (addSublayer) inside
     // drawRect is unreliable — so hop to the next main-loop turn.
     dispatch_async(dispatch_get_main_queue(), ^{ [self syncVideos:s]; [self syncScanner:s]; [self syncCamera:s]; });
-    // E1: while recording, push the live mic level to [data-vu] and keep repainting
-    if (self.audioRecorder) {
-        [self.audioRecorder updateMeters];
-        float db = [self.audioRecorder averagePowerForChannel:0];  // ~ -160 (silence) .. 0 (max)
-        float lvl = (db + 50.0f) / 50.0f;                          // map -50..0 dB → 0..1
-        if (lvl < 0) lvl = 0; else if (lvl > 1) lvl = 1;
-        tina4_set_audio_level(lvl);
-        [self setNeedsDisplay];                                    // keep the meter live
-    }
     // keep animating on-screen time-driven content (<lottie>) without needing a
     // fling — the display link paces itself and -tick repaints only the animated
     // region (setNeedsDisplayInRect).
@@ -615,6 +607,29 @@
 // back with tina4_set_recording (or '' if permission/record fails, which rolls
 // the control back to idle). AVAudioSession is the iOS-only bit vs macOS.
 
+// E1: a steady timer repaints the VU meter while recording — the normal render
+// loop idles when there's no CSS animation, so the pushed level needs its own tick.
+- (void)startLevelTimer {
+    [self.levelTimer invalidate];
+    self.levelTimer = [NSTimer timerWithTimeInterval:0.05 target:self
+        selector:@selector(meterTick) userInfo:nil repeats:YES];
+    // common modes so it keeps ticking during scrolling/touch tracking too
+    [[NSRunLoop mainRunLoop] addTimer:self.levelTimer forMode:NSRunLoopCommonModes];
+}
+- (void)stopLevelTimer {
+    [self.levelTimer invalidate]; self.levelTimer = nil;
+    tina4_set_audio_level(0.0f); [self setNeedsDisplay];   // settle the bar to zero
+}
+- (void)meterTick {
+    if (!self.audioRecorder) { [self stopLevelTimer]; return; }
+    [self.audioRecorder updateMeters];
+    float db = [self.audioRecorder averagePowerForChannel:0];  // ~ -160 (silence) .. 0 (max)
+    float lvl = (db + 50.0f) / 50.0f;                          // map -50..0 dB → 0..1
+    if (lvl < 0) lvl = 0; else if (lvl > 1) lvl = 1;
+    tina4_set_audio_level(lvl);
+    [self setNeedsDisplay];
+}
+
 - (void)startRecording {
     AVAudioSession *sess = [AVAudioSession sharedInstance];
     [sess setCategory:AVAudioSessionCategoryPlayAndRecord error:nil];
@@ -640,6 +655,8 @@
             if (!self.audioRecorder || err || ![self.audioRecorder record]) {
                 self.audioRecorder = nil;
                 tina4_set_recording("");   // failed → roll the <recorder> back to idle
+            } else {
+                [self startLevelTimer];    // E1: drive the live VU meter
             }
             [self setNeedsDisplay];
         });
@@ -647,6 +664,7 @@
 }
 
 - (void)stopRecording {
+    [self stopLevelTimer];   // E1: stop the VU feed
     if (!self.audioRecorder) { tina4_set_recording(""); [self setNeedsDisplay]; return; }
     [self.audioRecorder stop];
     self.audioRecorder = nil;
