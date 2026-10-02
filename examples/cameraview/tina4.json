@@ -1,0 +1,6 @@
+{
+  "name": "Camera View",
+  "bundleId": "com.tina4.cameraview",
+  "main": "main.pas",
+  "appUnits": []
+}
