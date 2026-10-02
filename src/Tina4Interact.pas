@@ -164,6 +164,8 @@ procedure TinaInvalidateLayout;
   :root var overrides). The shell sets it from the OS appearance; relayout re-
   cascades. Off by default (light). }
 procedure TinaSetColorScheme(Dark: Boolean);
+{ Current dark/light state (read it to flip reliably: TinaSetColorScheme(not TinaDarkMode)). }
+function TinaDarkMode: Boolean;
 
 { Capture protection: while ON, every element marked class="sensitive" (or a
   <secure> tag) paints as a solid redaction bar — its content is never drawn.
@@ -2601,6 +2603,14 @@ begin
   if Dark = GDarkMode then Exit;
   GDarkMode := Dark;
   GLayoutDirty := True;   // re-cascade: @media prefers-color-scheme rules change
+end;
+
+{ The engine's current dark/light state — so an app can flip it reliably
+  (TinaSetColorScheme(not TinaDarkMode)) instead of tracking its own copy, which
+  drifts from whatever the host set and makes the first toggle a no-op. }
+function TinaDarkMode: Boolean;
+begin
+  Result := GDarkMode;
 end;
 
 { ---- Native media embeds ---------------------------------------------- }

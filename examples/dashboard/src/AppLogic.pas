@@ -22,15 +22,13 @@ uses
   Tina4Builtins,   // BuiltinsRoot, FindById, SetElementText, BuiltinsDirty
   Tina4Interact;   // TinaSetColorScheme — the engine-native dark/light switch
 
-var Dark: Boolean = True;   // dashboard opens dark (the brand default)
-
 { Toggle the whole UI between dark and light. tina4pascal.css puts the dark tokens
   on :root and the light tokens in a prefers-color-scheme:light @media block, which
-  the engine drives from TinaSetColorScheme — so one call re-themes every surface. }
+  the engine drives from TinaSetColorScheme — so one call re-themes every surface.
+  Flip the engine's ACTUAL state (not a local copy) so every click toggles. }
 procedure ToggleTheme(const Args: string);
 begin
-  Dark := not Dark;
-  TinaSetColorScheme(Dark);   // flips @media(prefers-color-scheme) + re-cascades
+  TinaSetColorScheme(not TinaDarkMode);
 end;
 
 var Deploys: Integer = 0;
@@ -53,5 +51,5 @@ end;
 
 initialization
   RegisterAppActions;
-  TinaSetColorScheme(Dark);   // open in dark regardless of the host OS appearance
+  TinaSetColorScheme(True);   // open in dark (the brand default); the button flips it
 end.
