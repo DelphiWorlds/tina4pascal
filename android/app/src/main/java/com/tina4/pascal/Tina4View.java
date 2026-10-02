@@ -316,16 +316,54 @@ public class Tina4View extends View implements Runnable,
         scanner.setTorch((nativeEmbedFlags(found) & 1) != 0);   // torch attribute → flash
     }
 
+    // --- native <camera-view> (Camera2 preview, no decoder) -----------------
+    private Tina4Camera camview;
+    private String camFacing;
+
+    private void syncCamera() {
+        if (!(getParent() instanceof ViewGroup)) return;
+        ViewGroup parent = (ViewGroup) getParent();
+        int n = nativeEmbedCount();
+        int found = -1; float[] r = null;
+        for (int i = 0; i < n; i++) {
+            if (nativeEmbedKind(i) == 4) { found = i; r = nativeEmbedRect(i); break; }
+        }
+        if (found < 0 || r == null || r.length < 4 || r[2] <= 0 || r[3] <= 0) {
+            if (camview != null) { parent.removeView(camview.view); camview.close(); camview = null; camFacing = null; }
+            return;
+        }
+        String facing = nativeEmbedFormats(found);   // engine puts `facing` here for kind 4
+        if (facing == null || facing.isEmpty()) facing = "back";
+        int x = Math.round(r[0] * density), y = Math.round(r[1] * density);
+        int w = Math.round(r[2] * density), h = Math.round(r[3] * density);
+        // a facing change restarts the session on the other lens
+        if (camview != null && camFacing != null && !camFacing.equals(facing)) {
+            parent.removeView(camview.view); camview.close(); camview = null;
+        }
+        if (camview == null) {
+            camview = new Tina4Camera(getContext(), facing);
+            camFacing = facing;
+            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(w, h);
+            lp.leftMargin = x; lp.topMargin = y;
+            parent.addView(camview.view, lp);
+        } else {
+            FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) camview.view.getLayoutParams();
+            lp.width = w; lp.height = h; lp.leftMargin = x; lp.topMargin = y;
+            camview.view.setLayoutParams(lp);
+        }
+    }
+
     /** MainActivity forwards the CAMERA grant here: the surface is already live,
      *  so open() must be re-triggered by hand — no further layout pass will do it. */
     public void onCameraGranted() {
         if (scanner != null) scanner.retryOpen();
+        if (camview != null) camview.retryOpen();
     }
 
     private static final class VideoSync implements Runnable {
         private final Tina4View v;
         VideoSync(Tina4View v) { this.v = v; }
-        public void run() { v.syncVideos(); v.syncScanner(); }
+        public void run() { v.syncVideos(); v.syncScanner(); v.syncCamera(); }
     }
 
     // apply the <video> attributes once the media is prepared
