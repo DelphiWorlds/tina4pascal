@@ -1286,21 +1286,24 @@ begin
     Result.W := m.Width + padH;
   if ResolveSize(St.ExplicitHeight, 0) >= 0 then
     Result.H := St.ExplicitHeight + padV
-  else
-    // An inline element's background/padding box is sized by the font's content
-    // box (ascent+descent), NOT the author line-height — a `line-height:1.5`
-    // ancestor must not inflate a padded <span>/badge. Fall back to the line
-    // height only when there is no text metric.
-    if m.LineHeight > 0 then Result.H := m.LineHeight + padV
-    else Result.H := LineHeightOf(St) + padV;
+  // A PADDED/bordered/backgrounded inline box is sized by the font's content box
+  // (ascent+descent), NOT the author line-height — a `line-height:1.5` ancestor
+  // must not inflate a padded <span>/badge chip. But a BARE inline text run (no
+  // padding/border/own background — e.g. a flex item's label) takes the full line
+  // box = author line-height, like a browser; that extra leading balances the
+  // font's ascent/descent so a sibling (a status dot) centres on the glyph body.
+  else if (padV = 0) and (not St.BackgroundExplicit) then
+    Result.H := LineHeightOf(St)
+  else if m.LineHeight > 0 then Result.H := m.LineHeight + padV
+  else Result.H := LineHeightOf(St) + padV;
   if txt <> '' then
   begin
     run.Text := txt;
     run.X := St.BorderWidths.Left + St.Padding.Left; // relative for now
-    // centre the single line in the box (matches MakeControl) so a padded
-    // inline-block used as a button reads with even top/bottom padding
+    // centre the glyph's OWN box (ascent+descent, per the backend metrics — not a
+    // FontSize-tall box) so top/bottom leading read as uniform half-leading.
     run.Y := Max(St.BorderWidths.Top,
-      (Result.H - St.FontSize) / 2);
+      (Result.H - (m.Ascent + m.Descent)) / 2);
     run.FontSize := St.FontSize;
     run.Styles := FontStylesOf(St);
     run.Color := St.Color; run.LetterSpacing := 0;
