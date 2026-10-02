@@ -142,8 +142,10 @@ low-quality hack.
 ## D. Capture stack (per-shell)
 - **[M] `<recorder>`** — macOS ✅; iOS (`AVAudioRecorder`+`AVAudioSession`) /
   Android (`MediaRecorder`+`RECORD_AUDIO`) shell overrides are the follow-up.
-- **[M] `<camera-view>` preview** — core box + contract done; native preview +
-  frame grab per-shell (❌ everywhere).
+- **[M] `<camera-view>` preview** — core box + contract + engine enumeration
+  (embed kind 4) done; **iOS native preview done + confirmed on device**
+  (`Tina4View.m` `syncCamera:`). Remaining: macOS + Android native preview, and
+  `GrabCameraFrame` (JPEG) per-shell.
 - **[M] `<barcode-scanner>` camera** — decode done (libzbar, desktop); camera
   preview/capture per-shell (❌).
 
