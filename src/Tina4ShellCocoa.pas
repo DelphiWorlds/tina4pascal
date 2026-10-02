@@ -837,9 +837,19 @@ end;
 
 procedure TCocoaCanvas.DrawText(X, Y: Single; const Text: string; FontSize: Single;
   Styles: TTina4FontStyles; Color: TTina4Color);
+var f: NSFont; sz: NSSize; extraTop: Single;
 begin
   if Text = '' then Exit;
-  NSStr(Text).drawAtPoint_withAttributes(NSMakePoint(X, Y),
+  // Layout places text by its TOP and expects the baseline at Y + ascender (what
+  // MeasureText reports). But -drawAtPoint anchors the NSString LAYOUT box, whose
+  // line height exceeds ascender+descender and puts that extra leading ABOVE the
+  // ascent — so the glyph baseline lands ~leading px too low (a dot centred on the
+  // line box then rides above the letters). Lift the draw point by that leading so
+  // the painted baseline matches the measured ascender exactly.
+  f := FontFor(FontSize, Styles);
+  sz := NSStr(Text).sizeWithAttributes(AttrsFor(FontSize, Styles, Color));
+  extraTop := sz.height - (f.ascender - f.descender);   // leading added above the ascent
+  NSStr(Text).drawAtPoint_withAttributes(NSMakePoint(X, Y - extraTop),
     AttrsFor(FontSize, Styles, Color));
 end;
 

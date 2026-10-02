@@ -1247,6 +1247,24 @@ begin
     Result := St.FontSize * 1.2;
 end;
 
+{ Half-leading: the slack between a line box of height H and the text's own em box
+  (ascent+descent), split so equal space sits above and below — a browser's rule
+  for placing a single line inside a taller box. One definition for every call
+  site; the ascent-centred and the run.Y variants below both build on it, so the
+  baseline maths lives in exactly one place. }
+function HalfLeading(const H: Single; const m: TTina4TextMetrics): Single; inline;
+begin
+  Result := (H - (m.Ascent + m.Descent)) / 2;
+end;
+
+{ Baseline offset from the top of a line box of height H for an inline item whose
+  font metrics are m: the half-leading, then the font ascent — so text of any size
+  on the line shares one baseline. }
+function InlineBaseline(const H: Single; const m: TTina4TextMetrics): Single; inline;
+begin
+  Result := HalfLeading(H, m) + m.Ascent;
+end;
+
 procedure TLayoutEngine.CollectInlineText(Tag: THTMLTag; SB: TStringBuilder);
 var
   c: THTMLTag;
@@ -1302,8 +1320,7 @@ begin
     run.X := St.BorderWidths.Left + St.Padding.Left; // relative for now
     // centre the glyph's OWN box (ascent+descent, per the backend metrics — not a
     // FontSize-tall box) so top/bottom leading read as uniform half-leading.
-    run.Y := Max(St.BorderWidths.Top,
-      (Result.H - (m.Ascent + m.Descent)) / 2);
+    run.Y := Max(St.BorderWidths.Top, HalfLeading(Result.H, m));
     run.FontSize := St.FontSize;
     run.Styles := FontStylesOf(St);
     run.Color := St.Color; run.LetterSpacing := 0;
@@ -1348,7 +1365,7 @@ begin
   Result.W := Max(baseW, rtW);
   Result.H := rtH + baseH;
   // base baseline measured from the box top (used for inline baseline alignment)
-  Result.RubyBaseline := rtH + (baseH - (bm.Ascent + bm.Descent)) / 2 + bm.Ascent;
+  Result.RubyBaseline := rtH + InlineBaseline(baseH, bm);
 
   if rtTxt <> '' then
   begin
@@ -2468,8 +2485,7 @@ begin
     // Centre the glyph's OWN box (ascent+descent, per the backend's metrics),
     // not a FontSize-tall box — those differ per font, which is what left the
     // "Choose File"/"Take Photo" captions off-centre on Core Text.
-    run.Y := Max(St.BorderWidths.Top,
-      (Result.H - (m.Ascent + m.Descent)) / 2);
+    run.Y := Max(St.BorderWidths.Top, HalfLeading(Result.H, m));
     if ph <> '' then run.Color := $FF9CA3AF else run.Color := St.Color; run.LetterSpacing := 0;
     if (kind = ckButton) or St.AppearanceNone then    // centre the caption
       run.X := (Result.W - m.Width) / 2;
@@ -4193,7 +4209,7 @@ var
     qm := FCanvas.MeasureText(Q, St.FontSize, FontStylesOf(St));
     FCanvas.FontFamily := '';
     qi.Text := Q; qi.Box := nil; qi.W := qm.Width; qi.H := LineHeightOf(St);
-    qi.Ascent := (qi.H - (qm.Ascent + qm.Descent)) / 2 + qm.Ascent;
+    qi.Ascent := InlineBaseline(qi.H, qm);
     qi.FontSize := St.FontSize; qi.Styles := FontStylesOf(St); qi.Color := St.Color;
     qi.LetterSpacing := St.LetterSpacing; qi.FontFamily := St.FontFamily; qi.FontWeight := St.FontWeight; qi.ShadowDX := St.TextShadowOffsetX; qi.ShadowDY := St.TextShadowOffsetY; if St.TextShadowActive then qi.ShadowColor := St.TextShadowColor else qi.ShadowColor := 0;
     ComputeDecor(St, qi.Styles, qi.DecorLines, qi.DecorStyle, qi.DecorColor, qi.DecorThickness, qi.DecorOffset);
@@ -4292,7 +4308,7 @@ var
     ti.Text := W; ti.Box := nil; ti.W := tm.Width; ti.H := LineHeightOf(St);
     if St.SmallCaps then ti.W := SmallCapsWidth(W, St);   // composite width of the case-runs
     ti.W := ti.W * StretchFactorOf(FontStylesOf(St));     // font-stretch advance
-    ti.Ascent := (ti.H - (tm.Ascent + tm.Descent)) / 2 + tm.Ascent;
+    ti.Ascent := InlineBaseline(ti.H, tm);
     ti.FontAscent := tm.Ascent;
     if SameText(St.VerticalAlign, 'sub') then
     begin ti.Ascent := ti.Ascent - St.FontSize * 0.28; ti.FontAscent := ti.FontAscent - St.FontSize * 0.28; end
@@ -4585,7 +4601,7 @@ var
           it.H := LineHeightOf(St);
           // baseline sits (lineHeight-fontHeight)/2 below the run top, then
           // ascent below that — so text of any size shares one baseline.
-          it.Ascent := (it.H - (m.Ascent + m.Descent)) / 2 + m.Ascent;
+          it.Ascent := InlineBaseline(it.H, m);
           // FontAscent is the FONT's own ascent (what the backend adds to a run
           // top to reach the baseline). Placing the run by FontAscent — not by
           // it.Ascent, which also carries the half-leading — makes the glyph
