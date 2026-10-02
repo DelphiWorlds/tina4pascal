@@ -317,6 +317,46 @@ PY
   printf '%s' "$_out"
 }
 
+# prepare_pages <dir> — weld every static page under <dir>/pages/ INTO the binary.
+# Each pages/**/*.html becomes a RegisterEmbeddedPageB64('<path-relative-to-pages>',
+# …) call in a generated unit (<dir>/.tina4/Tina4EmbeddedPages.pas). The renderer's
+# <include src>/view.load resolver checks the embedded store before disk, so the
+# app ships as a single executable with no assets folder. Echoes the .tina4 dir if
+# it generated a unit (caller adds -Fu + the unit name to uses), else "".
+prepare_pages() {
+  _d="$1"
+  [ -d "$_d/pages" ] || { printf ''; return 0; }
+  # any .html under pages/?
+  find "$_d/pages" -type f -name '*.html' | head -1 | grep -q . || { printf ''; return 0; }
+  _out="$_d/.tina4"; mkdir -p "$_out"
+  PAGES_DIR="$_d/pages" PAGES_OUT="$_out" python3 - <<'PY' || return 1
+import os, base64, glob
+pdir = os.environ['PAGES_DIR']; out = os.environ['PAGES_OUT']
+lines = []
+for path in sorted(glob.glob(os.path.join(pdir, '**', '*.html'), recursive=True)):
+    name = os.path.relpath(path, pdir).replace(os.sep, '/')
+    data = open(path, 'rb').read()
+    b64 = base64.b64encode(data).decode('ascii')
+    chunks = [b64[i:i+100] for i in range(0, len(b64), 100)] or ['']
+    lit = (" +\n    ").join("'%s'" % c for c in chunks)
+    lines.append("  RegisterEmbeddedPageB64('%s',\n    %s);" % (name.replace("'", "''"), lit))
+unit = (
+    "unit Tina4EmbeddedPages;\n"
+    "{ GENERATED from pages/ by `tina4pascal pages` — do not edit by hand.\n"
+    "  Each static page is welded into the binary; the renderer serves it to\n"
+    "  <include src>/view.load before touching disk. }\n"
+    "{$mode delphi}{$H+}\n"
+    "interface\n"
+    "implementation\n"
+    "uses Tina4Pages;\n"
+    "initialization\n"
+    + "\n".join(lines) + "\n"
+    "end.\n")
+open(os.path.join(out, 'Tina4EmbeddedPages.pas'), 'w', encoding='utf-8').write(unit)
+PY
+  printf '%s' "$_out"
+}
+
 # Authenticode-sign a Windows .exe with osslsigncode (cross-platform, so we sign
 # straight from the Mac cross-build). Two key sources, tried in order:
 #
@@ -516,6 +556,9 @@ build_project() {
   # name given and does NOT append it) — otherwise the artifact can't run on
   # Windows and signtool/osslsigncode won't treat it as a PE.
   outname="$name"; case "$target" in windows|win64) outname="$name.exe";; esac
+  # Weld any pages/ into the binary (main.pas opts in with `uses Tina4EmbeddedPages`)
+  bppaged="$(prepare_pages "$PWD")"
+  [ -n "$bppaged" ] && extra="$extra -Fu$bppaged"
   say "${D}fpc $opts $flags $main${Z}"
   # project unit dirs: root + src, src/app, src/services (the same set the mobile
   # staging adds, so a unit like src/AppLogic.pas is found on every target);
@@ -602,10 +645,14 @@ proj_android_build() {
   # the iOS staging (proj_ios_stage) and the Windows CLI's android path.
   aappinc=""; aappdirs=""
   for u in $(jget_list appUnits); do aappinc="$aappinc, $u"; done
+  # pages/ → embedded-pages unit, auto-added to the uses splice (single-binary pages)
+  apaged="$(prepare_pages "$PWD")"
+  [ -n "$apaged" ] && aappinc="$aappinc, Tina4EmbeddedPages"
   printf '%s' "$aappinc" > "$host/jni/app_units.inc"      # BOM-free; empty ⇒ reference shell
   for d in "$PWD" "$PWD/src" "$PWD/src/app" "$PWD/src/services"; do
     [ -d "$d" ] && aappdirs="$aappdirs -Fu$d"
   done
+  [ -n "$apaged" ] && aappdirs="$aappdirs -Fu$apaged"
 
   # 3. native lib(s) — compile the JNI bridge against the REPO engine (src) plus
   #    the shared 3d units (ThreePascal) and the project's own app-units.
@@ -794,10 +841,14 @@ proj_ios_stage() {
   # Android JNI path (android/jni/app_units.inc).
   iappinc=""; iappdirs=""
   for u in $(jget_list appUnits); do iappinc="$iappinc, $u"; done
+  # pages/ → embedded-pages unit, auto-added to the uses splice (single-binary pages)
+  ipaged="$(prepare_pages "$PWD")"
+  [ -n "$ipaged" ] && iappinc="$iappinc, Tina4EmbeddedPages"
   printf '%s' "$iappinc" > "$ihost/app_units.inc"      # BOM-free; empty ⇒ reference shell
   for d in "$PWD" "$PWD/src" "$PWD/src/app" "$PWD/src/services"; do
     [ -d "$d" ] && iappdirs="$iappdirs -Fu$d"
   done
+  [ -n "$ipaged" ] && iappdirs="$iappdirs -Fu$ipaged"
   say "→ building iOS engine (libtina4ios.a)…"
   PPC_CONFIG_PATH="$FPC_HOME/etc" PATH="$FPC_HOME/bin:$PATH" \
     TINA4_IOS_ENG_DIR="$ihost" TINA4_SRC="$ROOT/src" \
@@ -1209,7 +1260,7 @@ EOF
 cmd_test() {
   need_fpc
   fail=0
-  for t in dom highlight codearea flexrebuild qr svg picture services http docs frond pseudo media webp pdf scanner barcode crypto auth rbacui authflow secrets ssoflow; do
+  for t in dom highlight codearea flexrebuild includes qr svg picture services http docs frond pseudo media webp pdf scanner barcode crypto auth rbacui authflow secrets ssoflow; do
     [ -f "$ROOT/tests/test_$t.pas" ] || continue
     o="$BUILD/test/$t"; mkdir -p "$o"
     "$FPC" -Mdelphi -Fu"$SRC" -FE"$o" -FU"$o" "$ROOT/tests/test_$t.pas" >/dev/null 2>&1 \
@@ -1289,6 +1340,18 @@ cmd_new() {
 }
 
 # build + run an app folder's main.pas on macOS (edit app.html, re-run to see)
+# Generate (or refresh) the embedded-pages unit from ./pages/ and report. The
+# build does this automatically; this command is for inspecting the result.
+cmd_pages() {
+  d="${1:-.}"
+  [ -d "$d/pages" ] || die "no pages/ folder in '$d' — put static .html screens there"
+  out="$(prepare_pages "$d")"
+  [ -n "$out" ] || die "no .html files under '$d/pages'"
+  n="$(find "$d/pages" -type f -name '*.html' | wc -l | tr -d ' ')"
+  ok "welded $n page(s) → $out/Tina4EmbeddedPages.pas"
+  say "  add ${D}uses Tina4EmbeddedPages;${Z} to main.pas (desktop); on mobile it is auto-wired."
+}
+
 cmd_dev() {
   d="${1:-.}"
   need_fpc
@@ -1302,9 +1365,13 @@ cmd_dev() {
       die "no main.pas in '$d' (scaffold one: tina4pascal new <name>, or add <script type=\"text/pascal\"> to app.html)"
     fi
   fi
+  # Weld any pages/ into the binary → <dir>/.tina4/Tina4EmbeddedPages.pas. The
+  # project main.pas opts in with `uses Tina4EmbeddedPages;` (auto on mobile).
+  paged="$(prepare_pages "$d")"
   o="$BUILD/dev"; mkdir -p "$o"
   extra=""
   [ -n "$inlined" ] && extra="-Fu$inlined"
+  [ -n "$paged" ] && extra="$extra -Fu$paged"
   [ -d "$d/src" ] && extra="$extra -Fu$d/src"
   say "${D}fpc $(basename "$d") → app${Z}"
   # shellcheck disable=SC2086
@@ -1963,6 +2030,7 @@ ${B}build & test${Z}
 ${B}start an app${Z}
   new <name>             scaffold a starter app (app.html + main.pas)
   dev [dir]              build + run an app folder on macOS (default: .)
+  pages [dir]            weld ./pages/*.html into the binary (embedded page store)
 
 ${B}macOS run${Z}
   macos [--run]          build the native macOS .app (same engine as mobile)
@@ -2028,6 +2096,7 @@ case "$cmd" in
   test)       cmd_test "$@" ;;
   new)        cmd_new "$@" ;;
   dev)        cmd_dev "$@" ;;
+  pages)      cmd_pages "$@" ;;
   macos)      cmd_macos "$@" ;;
   run)        if is_project; then run_project "$@"; else cmd_run "$@"; fi ;;
   render)     if is_project; then render_project "$@"; else die "render: run inside a project dir"; fi ;;

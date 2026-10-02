@@ -145,6 +145,13 @@ type
     function LoadImage(const Src: string): Integer; virtual;
     function ImageSize(Handle: Integer; out W, H: Single): Boolean; virtual;
     procedure DrawImage(Handle: Integer; X, Y, W, H: Single); virtual;
+    { Read a local text resource — an HTML partial for `<include src>`, a `.lang`
+      file, etc. — resolved the same way a relative `<img src>` is: against the
+      shell's bundle/asset base on mobile, else the process working dir. Returns
+      False (and Text='') when the file is absent or unreadable. The default
+      handles absolute + working-dir-relative paths; mobile shells override to
+      prepend their asset base. }
+    function ReadLocalFile(const Src: string; out Text: string): Boolean; virtual;
     { Decode an image `Src` (bare url/data:/file) to straight $AARRGGBB pixels.
       The base class handles WebP + data: URIs via DecodeToBaseStore; shells
       override to add their native decoders (PNG/JPEG). False = undecodable. }
@@ -1294,6 +1301,19 @@ end;
 function TTina4Canvas.RegisterFont(const Family, Src: string): Boolean;
 begin
   Result := False;   // backends that can load fonts override this
+end;
+
+function TTina4Canvas.ReadLocalFile(const Src: string; out Text: string): Boolean;
+var sl: TStringList;
+begin
+  Text := '';
+  Result := (Src <> '') and FileExists(Src);
+  if not Result then Exit;
+  sl := TStringList.Create;
+  try
+    try sl.LoadFromFile(Src); Text := sl.Text;
+    except Result := False; Text := ''; end;
+  finally sl.Free; end;
 end;
 
 procedure TTina4Canvas.DrawImage(Handle: Integer; X, Y, W, H: Single);

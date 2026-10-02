@@ -100,7 +100,7 @@ works everywhere, no core `SameText` edits. Two tiers, both proven by
 
 | Element | Status | Note |
 |---|---|---|
-| include[src] | ✅ | fetches HTML + splices in place, caches, nested, per-tag auth headers |
+| include[src] | ✅ | splices HTML in place — local file, embedded page, or fetched URL (cached, nested, per-tag auth); see also `view.load`/`view.show` for runtime screen swaps (ADR-0010) |
 | secure | ✅ | redacted under capture-protection (see `TinaSetCaptureProtected`) |
 | lottie | ✅ | **Tina4 custom** — pure-Pascal Lottie/Bodymovin player (`Tina4Lottie`) rendering inline JSON via Canvas 2D; shape layers, bezier paths, fills/strokes, keyframed transforms + parenting, cubic-bezier easing; animates off the ticker. No Skia/JS. Verified on iPhone |
 

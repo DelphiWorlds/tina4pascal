@@ -1,0 +1,11 @@
+# Headless nav check: tap each bottom tab, snapshot each screen.
+# 4 tabs across 1024px → centres at x = 128, 384, 640, 896; bar centre y ≈ 777.
+# Home/Explore/Profile are inline <template>s (view.show); Stats is a page welded
+# into the binary from pages/stats.html (view.load). Run: tina4pascal script verify.t4s
+snap /tmp/ms-1-home.png
+click 384 777
+snap /tmp/ms-2-explore.png
+click 640 777
+snap /tmp/ms-3-profile.png
+click 896 777
+snap /tmp/ms-4-stats.png

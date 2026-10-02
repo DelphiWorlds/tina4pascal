@@ -53,6 +53,7 @@ type
     destructor Destroy; override;
     procedure BeginFrame(Ctx: CGContextRef);
     procedure SetAssetBase(const Dir: string);   // bundle resource dir for relative <img>
+    function ReadLocalFile(const Src: string; out Text: string): Boolean; override;
     procedure FillRect(X, Y, W, H: Single; Color: TTina4Color); override;
     procedure StrokeRect(X, Y, W, H, Thickness: Single; Color: TTina4Color); override;
     procedure FillRoundRect(X, Y, W, H, Radius: Single; Color: TTina4Color); override;
@@ -206,6 +207,20 @@ end;
 procedure TIOSCanvas.SetAssetBase(const Dir: string);
 begin
   FAssetBase := Dir;
+end;
+
+{ Resolve a local <include src>/.lang path the same way a relative <img src> is:
+  absolute → as-is, else against the bundled app resource base. }
+function TIOSCanvas.ReadLocalFile(const Src: string; out Text: string): Boolean;
+var path: string;
+begin
+  if (Length(Src) > 0) and (Src[1] = '/') then
+    path := Src
+  else if FAssetBase <> '' then
+    path := FAssetBase + '/' + Src
+  else
+    path := Src;
+  Result := inherited ReadLocalFile(path, Text);
 end;
 
 function TIOSCanvas.MakeColor(Color: TTina4Color): CGColorRef;

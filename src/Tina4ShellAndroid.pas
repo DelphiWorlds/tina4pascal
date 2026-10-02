@@ -108,6 +108,7 @@ type
     constructor Create(Env: PJNIEnv);
     procedure BeginFrame(Env: PJNIEnv; Canvas: jobject);
     procedure SetAssetBase(const Dir: string);   // where filesDir/assets was extracted
+    function ReadLocalFile(const Src: string; out Text: string): Boolean; override;
     procedure FillRect(X, Y, W, H: Single; Color: TTina4Color); override;
     procedure StrokeRect(X, Y, W, H, Thickness: Single; Color: TTina4Color); override;
     procedure FillRoundRect(X, Y, W, H, Radius: Single; Color: TTina4Color); override;
@@ -292,6 +293,20 @@ end;
 procedure TAndroidCanvas.SetAssetBase(const Dir: string);
 begin
   FAssetBase := Dir;
+end;
+
+{ Resolve a local <include src>/.lang path the same way a relative <img src> is:
+  absolute → as-is, else against the extracted APK asset base. }
+function TAndroidCanvas.ReadLocalFile(const Src: string; out Text: string): Boolean;
+var path: string;
+begin
+  if (Length(Src) > 0) and (Src[1] = '/') then
+    path := Src
+  else if FAssetBase <> '' then
+    path := FAssetBase + '/' + Src
+  else
+    path := Src;
+  Result := inherited ReadLocalFile(path, Text);
 end;
 
 { ---- paint config ------------------------------------------------------ }

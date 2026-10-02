@@ -183,6 +183,43 @@ Examples: `examples/codearea`, `examples/codeeditor`, `examples/codeviewer`,
 [ADR-0008](plan/adr/0008-text-editing-and-highlighting.md) and
 [ADR-0009](plan/adr/0009-inline-script-extract-compile.md).
 
+## Multi-screen apps, no router
+
+One page can present many screens. A screen is just HTML spliced into a container
+live — no reload, no WebView navigation. Three built-in actions, callable straight
+from `onclick` with **no app code**:
+
+```html
+<main id="stage"> …first screen… </main>
+
+<button onclick="view.show('stage','profile')">Profile</button>   <!-- inline <template> -->
+<button onclick="view.load('stage','settings.html')">Settings</button> <!-- a page file -->
+
+<template id="profile"> …a whole screen… </template>
+```
+
+- **`view.show('stage','id')`** clones an inert `<template>` into the container —
+  every screen in one `app.html`, nothing to bundle.
+- **`view.load('stage','src')`** loads the screen from a file or a URL.
+- **`<include src="partial.html">`** splices a partial at load (auth + sandbox +
+  5-min cache); a URL fetches async, a local path reads instantly.
+
+Where the screens live is up to you, and the same `src` works for all three:
+
+| Storage | How to ship it | Best for |
+|---|---|---|
+| **Inline `<template>`** | in `app.html` | small/medium apps, zero extra files |
+| **Files in `assets/`** | bundled into the APK/IPA automatically | many or separately-authored screens |
+| **Welded into the binary** | drop them in `pages/` → `tina4pascal pages` | single-executable, no filesystem at all |
+
+A page under `pages/` is base64-compiled into a generated `Tina4EmbeddedPages`
+unit and served to `view.load`/`<include>` *before* any disk access, so the app
+needs no assets folder. It's auto-wired on mobile; on desktop add
+`uses Tina4EmbeddedPages;` to `main.pas`.
+
+See `examples/multiscreen` — one app, four screens: three inline `<template>`s and
+one welded in from `pages/stats.html`.
+
 ## Toolsets
 
 Everything you drive the stack with — by hand, from an IDE, or from an AI agent.
