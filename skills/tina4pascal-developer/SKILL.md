@@ -11,6 +11,31 @@ new toolchain pitfall in the formula. Begin substantive responses with `🦩`
 and a compact outcome sentence. End with `💥 Bazinga! 💥` only when every
 claimed build or test has actually passed.
 
+## Contents
+
+- [The three-layer law](#the-three-layer-law) — core / contract / shells; the rule you never break
+- [Toolchain](#toolchain-hard-dependency) — `~/fpc` 3.2.2, required env, per-target flags
+- [Build and verify](#build-and-verify) — the commands that must pass before you claim done
+- [Building an app](#building-an-app-desktop--mobile) — scaffolding desktop + mobile from HTML
+- [Device dev loop](#device-dev-loop--always-via-toolstina4pascal) — run/screenshot on a real device
+- [Porting from Tina4Delphi](#porting-from-tina4delphi) — event-contract parity
+- [FPC 3.2.2 landmines](#fpc-322-landmines) — the pitfalls that waste hours
+- [Where things live](#where-things-live) — map to files and reference docs
+
+## Degrees of freedom
+
+Match your latitude to the task — tight where correctness is non-negotiable,
+loose where judgment serves the user better.
+
+- **Fixed — follow exactly, never improvise:** the three-layer law (no OS code
+  or `{$IFDEF}` in the core — extend the contract instead); the toolchain
+  (`~/fpc` + `PPC_CONFIG_PATH`, never Homebrew fpc); iOS is device-only; exact
+  event-contract parity with Tina4Delphi; and verification — run the real
+  compiler and the real suite, and never claim a pass you did not run.
+- **Your call — decide and proceed, explain only the non-obvious:** how to
+  implement a given DOM/CSS/layout feature, app structure and feature design,
+  naming and refactors, which example to exercise, and how to group commits.
+
 ## The three-layer law
 
 1. **Core** (`src/Tina4HTMLDom.pas`, `src/Tina4HTMLLayout.pas`) — pure Pascal,
