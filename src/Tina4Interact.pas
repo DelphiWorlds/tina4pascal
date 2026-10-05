@@ -91,6 +91,10 @@ procedure TinaScrollBy(X, Y, DX, DY: Single);
 { Cursor moved (desktop mouse, no button) → drives the :hover pseudo-class.
   Pass device px, like TinaTouch. Never called on touch platforms. }
 procedure TinaHover(X, Y: Single);
+{ Did the last TinaHover fire an onmousemove handler? The host calls this after
+  TinaHover and Invalidates on True, so plain hover stays repaint-free while a
+  cursor-driven effect repaints each move. }
+function TinaTakeMoveRepaint: Boolean;
 { OS pointer shape for the element under (X,Y) in device px — the CSS `cursor`
   of the hovered element, inheriting from its ancestors. Desktop shells feed
   this straight to Shell.SetCursor on mouse move. }
@@ -265,6 +269,7 @@ var
   GFontsDone: TStringList = nil; // @font-face families already registered (this canvas)
   GDocDirty: Boolean = True;     // needs a full re-parse (new document)
   GLayoutDirty: Boolean = False; // DOM mutated → re-run layout only
+  GMoveRepaint: Boolean = False; // an onmousemove handler fired → host should repaint
   GLayoutW: Single = -1;
   GDensity: Single = 1;
   GViewH: Single = 0;           // CSS px
@@ -389,6 +394,42 @@ begin
   if p > 0 then nm := Trim(Copy(h, 1, p - 1)) else nm := Trim(h);
   DispatchActionArgs(nm, IntToStr(Round(ScrollPx)));
   if BuiltinsDirty then begin BuiltinsDirty := False; GLayoutDirty := True; end;
+end;
+
+{ First node in document order carrying an onmousemove handler. A cursor-driven
+  effect typically puts one on <body> or the hero container. }
+function FindOnMouseMoveTag(Node: THTMLTag): THTMLTag;
+var c, r: THTMLTag;
+begin
+  Result := nil;
+  if Node = nil then Exit;
+  if Node.HasAttribute('onmousemove') then Exit(Node);
+  for c in Node.Children do begin r := FindOnMouseMoveTag(c); if r <> nil then Exit(r); end;
+end;
+
+{ Fire an element's onmousemove handler, passing the cursor as "x,y" in CSS px
+  (viewport coords) so the handler can drive a parallax/particle effect. Mirrors
+  FireOnScroll: a DOM mutation in the handler relayouts next frame, and we flag
+  that the host should repaint (TinaHover is otherwise repaint-free). }
+procedure FireOnMouseMove(Tag: THTMLTag; MX, MY: Single);
+var h, nm: string; p: Integer;
+begin
+  if (Tag = nil) or not Tag.HasAttribute('onmousemove') then Exit;
+  h := Tag.GetAttribute('onmousemove');
+  p := Pos('(', h);
+  if p > 0 then nm := Trim(Copy(h, 1, p - 1)) else nm := Trim(h);
+  DispatchActionArgs(nm, Format('%d,%d', [Round(MX), Round(MY)]));
+  if BuiltinsDirty then begin BuiltinsDirty := False; GLayoutDirty := True; end;
+  GMoveRepaint := True;
+end;
+
+{ Host hook: did the last TinaHover fire an onmousemove handler (so the host
+  should Invalidate)? Returns and clears the flag — keeps plain hover repaint-free
+  on pages without an onmousemove handler. }
+function TinaTakeMoveRepaint: Boolean;
+begin
+  Result := GMoveRepaint;
+  GMoveRepaint := False;
 end;
 
 { Control kind of a tag, but ckNone for anything that is NOT a form-control
@@ -2351,8 +2392,13 @@ procedure TinaHover(X, Y: Single);
 var cx, cy: Single;
 begin
   if GRoot = nil then Exit;
-  if (GSheet = nil) or not GSheet.HasInteractiveSelectors then Exit;  // nothing hovers
   cx := X / GDensity; cy := Y / GDensity;
+  // onmousemove dispatch runs BEFORE the hover early-out, so a page with no
+  // :hover CSS still receives cursor moves (e.g. a parallax/particle handler).
+  // Reset the repaint flag so it reflects THIS move, not a stale earlier one.
+  GMoveRepaint := False;
+  if GParser <> nil then FireOnMouseMove(FindOnMouseMoveTag(GParser.Root), cx, cy);
+  if (GSheet = nil) or not GSheet.HasInteractiveSelectors then Exit;  // nothing hovers
   SetHoverTag(HitTest(GRoot, cx, cy + GScrollY));
 end;
 

@@ -156,6 +156,7 @@ works everywhere, no core `SameText` edits. Two tiers, both proven by
 | Element/Attr | Status | Note |
 |---|---|---|
 | onclick (any element) | ✅ | semantic `obj:method(args)` + `:active` feedback |
+| onmousemove (body/any element) | ✅ | fires the action with the cursor as `"x,y"` (CSS px, viewport); runs even without `:hover` CSS; host repaints only when a handler fired. For cursor parallax/particle effects — no JS engine. ADR-0012; `test_mousemove` |
 | id / class / style | ✅ | selectors + inline styles (inline wins) |
 | hidden attribute | ✅ | ⇒ display:none |
 | `<!-- comments -->` | ✅ | stripped by the parser (`SkipComment`) — content and any tag-like text inside are dropped, never a stray node |
