@@ -223,11 +223,20 @@ end;
 { Scripted driver: click X Y | key TEXT | enter|tab|backspace|esc |
   wheel X Y DY | snap PATH | quit — one command per tick. This is the seed
   of headless GUI automation: same events, no human. }
+// "magic" cursor sparkle helpers — bodies are defined further below; forward
+// declared here because Tick/Paint (above their definitions) already call them.
+procedure SpawnSpark(X, Y: Single); forward;
+function UpdateSparks(dt: Single): Boolean; forward;
+procedure DrawSparks(Canvas: TTina4Canvas); forward;
+
 procedure TViewer.Tick;
 var
   line, cmd, a, b, c: string;
   parts: TStringList;
 begin
+  // headless: advance the sparkle particles on the script ticker too, so
+  // snapshots can capture them mid-flight (interactive uses MomentumTick).
+  if UpdateSparks(0.045) then Shell.Invalidate;
   if (Script = nil) or (ScriptPos >= Script.Count) then Exit;
   line := Trim(Script[ScriptPos]);
   Inc(ScriptPos);
@@ -660,6 +669,7 @@ begin
     thumbY := (ScrollY / maxScroll) * (H - thumbH);
     Canvas.FillRect(W - 8, thumbY, 6, thumbH, $60000000);
   end;
+  DrawSparks(Canvas);   // "magic" cursor sparkle, painted on top of everything
   LastPaintMs := Integer(GetTickCount64 - paintT0);   // drives adaptive anim pacing
 end;
 
@@ -689,13 +699,160 @@ begin
   Shell.Invalidate;
 end;
 
+{ --- Hero mouse parallax (tina4studio native test harness; additive, no-op for
+  any page without .layer[data-depth] elements). Re-expresses prototype/hero.js
+  natively: each layer translates by (cursor-from-centre) x per-layer depth. --- }
+var
+  GParallaxOn: Boolean = False;
+  GHeroW: Integer = 1024;
+  GHeroH: Integer = 800;
+
+function HeroHasLayers(T: THTMLTag): Boolean;
+var
+  i: Integer;
+begin
+  Result := False;
+  if T = nil then Exit;
+  if (Pos('layer', LowerCase(T.GetAttribute('class', ''))) > 0)
+     and (T.GetAttribute('data-depth', '') <> '') then Exit(True);
+  for i := 0 to T.Children.Count - 1 do
+    if HeroHasLayers(T.Children[i]) then Exit(True);
+end;
+
+procedure HeroParallax(T: THTMLTag; nx, ny: Single);
+var
+  i: Integer;
+  d, ox, oy: Double;
+  ds: string;
+  fs: TFormatSettings;
+begin
+  if T = nil then Exit;
+  fs := DefaultFormatSettings;
+  fs.DecimalSeparator := '.';
+  ds := T.GetAttribute('data-depth', '');
+  if (Pos('layer', LowerCase(T.GetAttribute('class', ''))) > 0) and (ds <> '') then
+  begin
+    d := StrToFloatDef(ds, 0, fs);
+    ox := nx * 42 * d;   // horizontal travel, px, at depth 1
+    oy := ny * 26 * d;   // vertical travel, px, at depth 1
+    // Centre via transform (to viewport centre, then back by half the layer),
+    // then append the parallax shift. The engine accumulates successive
+    // translate()s and resolves vw/% against the right bases.
+    T.Style.AddOrSetValue('transform',
+      Format('translate(50vw, 50vh) translate(-50%%, -50%%) scale(1.15) translate(%.2fpx, %.2fpx)', [ox, oy], fs));
+  end;
+  for i := 0 to T.Children.Count - 1 do HeroParallax(T.Children[i], nx, ny);
+end;
+
+{ --- "Magic" cursor sparkle (ported from prototype/ide/workspace.js sparkle()):
+  4-point sparkle stars fly outward from the cursor and fade over ~0.62s,
+  alternating pink (--accent-ui) and gold (#ffd166). Drawn natively on the
+  canvas in Paint; spawned on MouseMove; advanced on the interactive ticker. --- }
+type
+  TSpark = record
+    OX, OY, DX, DY, Sz, Rot, Age, Delay: Single;
+    Gold, Alive: Boolean;
+  end;
+var
+  GSparks: array[0..399] of TSpark;
+  GSparkHead: Integer = 0;
+  GSparkLastMs: QWord = 0;
+  GSparkSeeded: Boolean = False;
+
+procedure SpawnSpark(X, Y: Single);
+var
+  ang, dist: Single;
+begin
+  if not GSparkSeeded then begin Randomize; GSparkSeeded := True; end;
+  ang := Random * 2 * Pi;
+  dist := 26 + Random * 36;
+  with GSparks[GSparkHead] do
+  begin
+    OX := X; OY := Y;
+    DX := Cos(ang) * dist; DY := Sin(ang) * dist;
+    Sz := 6 + Random * 8;
+    Rot := Random * 180 - 90;
+    Age := 0; Delay := Random * 0.06;
+    Gold := Random < 0.5;
+    Alive := True;
+  end;
+  GSparkHead := (GSparkHead + 1) mod Length(GSparks);
+end;
+
+function UpdateSparks(dt: Single): Boolean;
+var
+  i: Integer;
+begin
+  Result := False;
+  for i := 0 to High(GSparks) do
+    if GSparks[i].Alive then
+    begin
+      GSparks[i].Age := GSparks[i].Age + dt;
+      if GSparks[i].Age >= 0.62 + GSparks[i].Delay then GSparks[i].Alive := False
+      else Result := True;
+    end;
+end;
+
+procedure DrawSparks(Canvas: TTina4Canvas);
+const
+  // 4-point sparkle polygon, centred on origin, ~unit radius (matches the
+  // clip-path in prototype/ide/workspace.css, re-centred to [-0.5..0.5]).
+  PX: array[0..7] of Single = ( 0.00,  0.11,  0.50,  0.11,  0.00, -0.11, -0.50, -0.11);
+  PY: array[0..7] of Single = (-0.50, -0.11,  0.00,  0.11,  0.50,  0.11,  0.00, -0.11);
+var
+  i, k, a8: Integer;
+  p, e, scale, alpha, cx, cy, s, ang, ca, sa, rx, ry: Single;
+  col: TTina4Color;
+  poly: TTina4PointArray;
+begin
+  SetLength(poly, 8);
+  for i := 0 to High(GSparks) do
+    if GSparks[i].Alive then
+    begin
+      p := (GSparks[i].Age - GSparks[i].Delay) / 0.62;
+      if p < 0 then Continue;
+      if p > 1 then p := 1;
+      e := 1 - (1 - p) * (1 - p);                 // ease-out
+      scale := 0.2 + 0.8 * p;
+      if p <= 0.7 then alpha := 1 else alpha := 1 - (p - 0.7) / 0.3;
+      if alpha < 0 then alpha := 0;
+      cx := GSparks[i].OX + GSparks[i].DX * e;
+      cy := GSparks[i].OY + GSparks[i].DY * e;
+      s := GSparks[i].Sz * scale;
+      ang := GSparks[i].Rot * p * Pi / 180;
+      ca := Cos(ang); sa := Sin(ang);
+      for k := 0 to 7 do
+      begin
+        rx := PX[k] * s; ry := PY[k] * s;
+        poly[k].X := cx + rx * ca - ry * sa;
+        poly[k].Y := cy + rx * sa + ry * ca;
+      end;
+      a8 := Round(alpha * 255);
+      if GSparks[i].Gold then col := TTina4Color((Cardinal(a8) shl 24) or $00FFD166)
+      else col := TTina4Color((Cardinal(a8) shl 24) or $00FF78BB);
+      Canvas.FillPolygon([poly], col);
+    end;
+end;
+
 procedure TViewer.MouseMove(X, Y: Single);
 var
   hit: THTMLTag;
   sb: TLayoutBox;
   ho: Integer;
+  pnx, pny: Single;
 begin
   if RootBox = nil then Exit;
+  if GParallaxOn then
+  begin
+    pnx := (X / GHeroW) * 2 - 1;
+    pny := (Y / GHeroH) * 2 - 1;
+    if pnx < -1 then pnx := -1 else if pnx > 1 then pnx := 1;
+    if pny < -1 then pny := -1 else if pny > 1 then pny := 1;
+    HeroParallax(BuiltinsRoot, pnx, pny);
+    SpawnSpark(X, Y); SpawnSpark(X, Y);   // "magic" trail follows the cursor
+    Rebuild;            // frees RootBox + Invalidate; relayout happens on next paint
+    Exit;               // nothing below needs RootBox (now nil) for a hero page
+  end;
   // hovered option while a dropdown is open
   if OpenSelect <> nil then
   begin
@@ -752,6 +909,11 @@ begin
   // live data (SSE/WS): fire queued messages onto their DOM elements, relayout
   LiveDrain;
   if BuiltinsDirty then begin BuiltinsDirty := False; Rebuild; Shell.Invalidate; end;
+  // "magic" cursor sparkle: advance flying stars + repaint while any are alive
+  nowMs := GetTickCount64;
+  if GSparkLastMs = 0 then GSparkLastMs := nowMs;
+  if UpdateSparks((nowMs - GSparkLastMs) / 1000.0) then Shell.Invalidate;
+  GSparkLastMs := nowMs;
   // CSS animation / <lottie>: advance the shared clock + repaint while active —
   // but pace it ADAPTIVELY. A cheap frame (transform/opacity) repaints at the full
   // ~60fps ticker; an expensive one (a CSS filter like the lava-lamp blur, which is
@@ -1366,6 +1528,8 @@ begin
   RegisterBuiltinActions;
   RegisterLiveActions;    // sse.connect / ws.connect / live.close
   BuiltinsRoot := Viewer.Parser.Root;
+  GHeroW := WinW; GHeroH := WinH;         // hero parallax: viewport for cursor mapping
+  GParallaxOn := HeroHasLayers(BuiltinsRoot);
   RecalcOutputs(BuiltinsRoot);            // seed <output> values before first paint
   // custom-element registry demos: a Tier-1 template button and a Tier-2 native
   // element. Registered ONCE here; the engine expands/paints/dispatches them.

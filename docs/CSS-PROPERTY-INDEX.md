@@ -132,7 +132,7 @@ Status: ✅ Supported · 🟡 Partial (caveat noted) · 📦 Parsed-only (in
 | Property | Status | Note |
 |---|---|---|
 | opacity | ✅ | subtree alpha via ScaleAlpha (per-channel, not group compositing) |
-| transform: translate/rotate/scale/skew | ✅ | 2D transforms via NSAffineTransform (skew adds a shear on the shell canvas — `Skew` contract method) |
+| transform: translate/rotate/scale/skew | ✅ | 2D transforms via NSAffineTransform (skew adds a shear on the shell canvas — `Skew` contract method). `translate()` `%` resolves against the element's OWN box (X→width, Y→height), so `translate(-50%,-50%)` centres and px/%/vw/`calc()` compose like a browser — ADR-0011; reftests `transform-translate-pct`, `transform-translate-calc` |
 | transform: matrix() | ✅ | `matrix(a,b,c,d,e,f)` concatenated on the shell canvas (`TransformMatrix` contract method → NSAffineTransformStruct); pivots at `transform-origin` |
 | transform: 3d | ✅ | `rotateX/Y/Z`, `translateZ/translate3d`, `scaleZ/scale3d`, `perspective()`, `matrix3d()`. The chain builds a 4×4 matrix; the element rasterises into the offscreen layer, its 4 corners project through the matrix + perspective divide, and the texture is perspective-warped onto the quad (`EndLayer3D`: inverse-homography sampling → CGBitmapContext blit on Cocoa/iOS, pure-Pascal `WarpQuad` on the raster/Android path). Multi-plane `transform-style:preserve-3d` scenes (z-sort + backface-cull) are done — see the transform-style row |
 | transform-origin | ✅ | keyword/px/% pivot for rotate/scale/skew (default 50% 50%) |

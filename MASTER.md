@@ -55,6 +55,7 @@ gets an **ADR**. Conventions and templates: [`plan/README.md`](plan/README.md).
 - [ADR-0008](plan/adr/0008-text-editing-and-highlighting.md) — `<codearea>`, highlighter registry, text-edit model
 - [ADR-0009](plan/adr/0009-inline-script-extract-compile.md) — inline `<script type="text/pascal">` extracted + compiled
 - [ADR-0010](plan/adr/0010-code-folding.md) — `<codearea>` code folding by indentation
+- [ADR-0011](plan/adr/0011-transform-percent-resolution.md) — `translate()` `%` resolves against the element's own box
 
 ### Task plans — `plan/`
 - [code-editing-highlighting](plan/code-editing-highlighting.md) — `<codearea>` + Tina4Highlight
