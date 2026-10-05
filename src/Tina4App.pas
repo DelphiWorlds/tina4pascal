@@ -266,7 +266,8 @@ begin
     WM_LBUTTONUP: begin GMouseDown := False; ReleaseCapture;
       x := SmallInt(lp and $FFFF); y := SmallInt((lp shr 16) and $FFFF); TinaTouch(1, x, y); WRepaint; end;
     WM_MOUSEMOVE: begin x := SmallInt(lp and $FFFF); y := SmallInt((lp shr 16) and $FFFF);
-      if GMouseDown then begin TinaTouch(2, x, y); WRepaint; end else TinaHover(x, y); end;
+      if GMouseDown then begin TinaTouch(2, x, y); WRepaint; end
+      else begin TinaHover(x, y); if TinaTakeMoveRepaint then WRepaint; end; end;
     WM_MOUSEWHEEL: begin dz := SmallInt((wp shr 16) and $FFFF); TinaScrollBy(GW div 2, GH div 2, 0, -dz); WRepaint; end;
     WM_CHAR: begin TinaKey(Integer(wp)); WRepaint; end;
     WM_TIMER: if TinaTick = 1 then WRepaint;
@@ -481,7 +482,7 @@ begin
       ButtonPress_: begin mouseDown := True; TinaTouch(0, LI32(ev, OFF_X), LI32(ev, OFF_Y)); Render; end;
       ButtonRelease_: begin mouseDown := False; TinaTouch(1, LI32(ev, OFF_X), LI32(ev, OFF_Y)); Render; end;
       MotionNotify_: if mouseDown then begin TinaTouch(2, LI32(ev, OFF_X), LI32(ev, OFF_Y)); Render; end
-        else TinaHover(LI32(ev, OFF_X), LI32(ev, OFF_Y));
+        else begin TinaHover(LI32(ev, OFF_X), LI32(ev, OFF_Y)); if TinaTakeMoveRepaint then Render; end;
       ClientMessage_: if TXID(PPtrUInt(PByte(@ev) + OFF_CM_DATA0)^) = wmDelete then Break;
     end;
   end;
@@ -527,7 +528,7 @@ begin
 end;
 procedure TAppDriver.Down(X, Y: Single); begin TinaTouch(0, X, Y); Shell.Invalidate; end;
 procedure TAppDriver.Up(X, Y: Single);   begin TinaTouch(1, X, Y); Shell.Invalidate; end;
-procedure TAppDriver.Move(X, Y: Single); begin TinaHover(X, Y); end;
+procedure TAppDriver.Move(X, Y: Single); begin TinaHover(X, Y); if TinaTakeMoveRepaint then Shell.Invalidate; end;
 procedure TAppDriver.Drag(X, Y: Single); begin TinaTouch(2, X, Y); Shell.Invalidate; end;
 procedure TAppDriver.Scroll(X, Y, DX, DY: Single); begin TinaScrollBy(X, Y, DX, DY); Shell.Invalidate; end;
 procedure TAppDriver.Tick;
