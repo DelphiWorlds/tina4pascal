@@ -258,6 +258,11 @@ begin
   TinaSetRecording(string(Path));
 end;
 
+procedure tina4_set_audio_level(Level: single); cdecl;
+begin
+  TinaSetAudioLevel(Level);
+end;
+
 { ---- engine-drawn <audio controls> playback -------------------------- }
 
 { Source URL of the audio control the user last toggled (empty if none). }
@@ -366,6 +371,7 @@ exports
   tina4_touch, tina4_tick, tina4_anim_active, tina4_http_pending,
   tina4_wants_keyboard, tina4_blur, tina4_blink_caret, tina4_key,
   tina4_focus_kind, tina4_focus_next, tina4_set_file, tina4_set_photo, tina4_set_recording,
+  tina4_set_audio_level,
   tina4_embed_count, tina4_embed_rect, tina4_embed_src,
   tina4_embed_flags, tina4_embed_poster, tina4_embed_kind,
   tina4_embed_formats, tina4_scan_result,

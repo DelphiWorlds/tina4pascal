@@ -985,8 +985,15 @@ begin
         Rule.Selector := TrimmedSel;
         Rule.MediaCond := MediaCond;   // '' unless inside an @media block
 
-        // Check if this is a :root or * selector (global custom properties)
-        IsGlobalScope := SameText(TrimmedSel, ':root') or (TrimmedSel = '*');
+        // Check if this is a :root or * selector (global custom properties). A
+        // :root qualified by a pseudo/attribute (e.g. `:root:not([data-theme])`)
+        // counts as global ONLY inside an @media block — there the query gates it
+        // (prefers-color-scheme theme swaps). A bare `:root[data-theme=light]` must
+        // NOT be global: it should apply only when the root carries that attribute,
+        // so treating it as unconditional would clobber the default :root tokens.
+        IsGlobalScope := SameText(TrimmedSel, ':root') or (TrimmedSel = '*')
+          or ((MediaCond <> '') and
+              (TrimmedSel.ToLower.StartsWith(':root:') or TrimmedSel.ToLower.StartsWith(':root[')));
 
         for D in Decls do
         begin
@@ -3080,6 +3087,13 @@ begin
   begin
     Result := StrToFloatDef(Str.Replace('em', ''), 0) * EmSize;
   end
+  // ch (advance of '0') and ex (x-height) ≈ half an em — we don't measure the
+  // font here, so use the standard 0.5em approximation (prevents e.g. a
+  // `max-width:65ch` from mis-parsing to 0 and collapsing the element).
+  else if Str.EndsWith('ch') then
+    Result := StrToFloatDef(Str.Replace('ch', ''), 0) * EmSize * 0.5
+  else if Str.EndsWith('ex') then
+    Result := StrToFloatDef(Str.Replace('ex', ''), 0) * EmSize * 0.5
   // viewport units — resolve against the ICB set by SetCalcContext (0 before then)
   else if Str.EndsWith('vmin') then
     Result := StrToFloatDef(Str.Replace('vmin', ''), 0) * Min(GCalcVpW, GCalcVpH) / 100
@@ -4244,7 +4258,8 @@ begin
     Style.Color := ParseColor(Temp);
   if Decls.TryGetValue('background-color', Temp) and not ShouldSkip(Temp) then
   begin
-    Style.BackgroundColor := ParseColor(Temp);
+    if SameText(Trim(Temp), 'currentcolor') then Style.BackgroundColor := Style.Color
+    else Style.BackgroundColor := ParseColor(Temp);
     Style.BackgroundExplicit := True;   // author set it — controls keep it (even transparent)
   end;
   if Decls.TryGetValue('background', Temp) and not ShouldSkip(Temp) then
@@ -4287,6 +4302,8 @@ begin
           Style.BackgroundColor := ParseColor(BgRest);
       end;
     end
+    else if SameText(Trim(BgVal), 'currentcolor') then
+      Style.BackgroundColor := Style.Color   // `background:currentColor` → the text colour
     else
       // a plain solid colour
       Style.BackgroundColor := ParseColor(BgVal);

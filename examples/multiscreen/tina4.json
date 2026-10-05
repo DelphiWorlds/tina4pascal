@@ -1,0 +1,5 @@
+{
+  "name": "Screens",
+  "bundleId": "com.tina4.multiscreen",
+  "main": "main.pas"
+}

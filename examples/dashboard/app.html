@@ -1,0 +1,78 @@
+<!doctype html>
+<html><head>
+  <link rel="stylesheet" href="assets/tina4pascal.css">
+</head>
+<body id="app">
+
+  <!-- top bar: brand + a theme toggle wired to a PASCAL action (no JavaScript) -->
+  <header style="display:flex;align-items:center;justify-content:space-between;padding:16px 28px;border-bottom:1px solid var(--tina-border);background:var(--tina-surface)">
+    <div style="font-weight:800;font-size:18px">tina4<span style="color:var(--tina-pink)">pascal</span>
+      <span style="color:var(--tina-muted);font-weight:500;font-size:13px;margin-left:8px">Operations</span></div>
+    <button class="tina4-btn tina4-btn-secondary tina4-btn-sm" onclick="app.theme()">◐ Theme</button>
+  </header>
+
+  <main style="max-width:1100px;margin:0 auto;padding:32px 28px">
+
+    <p class="tina4-eyebrow">Operations · live</p>
+    <h1 class="tina4-display" style="margin:4px 0 6px">Everything is running smoothly.</h1>
+    <p style="color:var(--tina-muted);margin:0 0 28px">Monitor the services that keep your business moving — rendered natively by tina4, no JavaScript.</p>
+
+    <!-- KPI cards -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px">
+      <div class="tina4-card"><div style="color:var(--tina-muted);font-size:13px">Requests today</div>
+        <div style="font-size:30px;font-weight:800;margin-top:4px">24,816</div>
+        <div style="color:var(--tina-success);font-size:12px;margin-top:4px">↑ 12.8% this week</div></div>
+      <div class="tina4-card"><div style="color:var(--tina-muted);font-size:13px">Response time</div>
+        <div style="font-size:30px;font-weight:800;margin-top:4px">42 ms</div>
+        <div style="color:var(--tina-success);font-size:12px;margin-top:4px">↓ 8 ms this week</div></div>
+      <div class="tina4-card"><div style="color:var(--tina-muted);font-size:13px">Active projects</div>
+        <div style="font-size:30px;font-weight:800;margin-top:4px">18</div>
+        <div style="color:var(--tina-success);font-size:12px;margin-top:4px">3 deployed today</div></div>
+      <div class="tina4-card"><div style="color:var(--tina-muted);font-size:13px">Uptime</div>
+        <div style="font-size:30px;font-weight:800;margin-top:4px">99.98%</div>
+        <div style="color:var(--tina-success);font-size:12px;margin-top:4px">All systems healthy</div></div>
+    </div>
+
+    <!-- chart + infra health -->
+    <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-bottom:20px">
+      <div class="tina4-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <strong>Request volume</strong><span class="tina4-badge" style="color:var(--tina-info)">Last 7 days</span></div>
+        <!-- pure-CSS bar chart from the design system — no JS, no canvas -->
+        <!-- the kit's own percentage-height bar classes (now resolved natively) -->
+        <div class="tina4-chart">
+          <div class="tina4-bar tina4-bar-1"></div><div class="tina4-bar tina4-bar-3"></div>
+          <div class="tina4-bar tina4-bar-2"></div><div class="tina4-bar tina4-bar-5"></div>
+          <div class="tina4-bar tina4-bar-4"></div><div class="tina4-bar tina4-bar-7"></div>
+          <div class="tina4-bar tina4-bar-6"></div><div class="tina4-bar tina4-bar-8"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;color:var(--tina-muted);font-size:12px;margin-top:8px"><span>MON</span><span>TODAY</span></div>
+      </div>
+
+      <div class="tina4-card">
+        <strong>Infrastructure health</strong>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px"><span>API cluster</span><span class="tina4-badge tina4-badge-success">Operational</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px"><span>PostgreSQL</span><span class="tina4-badge tina4-badge-success">Operational</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px"><span>Queue workers</span><span class="tina4-badge tina4-badge-warning">Review</span></div>
+        <div style="margin-top:20px;font-size:13px;font-weight:600">CPU utilization · 38%</div>
+        <div style="height:8px;background:var(--tina-surface-3);border-radius:4px;overflow:hidden;margin-top:6px">
+          <div style="width:38%;height:8px;background:linear-gradient(90deg,var(--tina-pink),var(--tina-magenta))"></div></div>
+        <div style="color:var(--tina-muted);font-size:12px;margin-top:8px">2 workers approaching their memory limit.</div>
+      </div>
+    </div>
+
+    <!-- deployments table -->
+    <div class="tina4-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <strong>Project deployments</strong><button class="tina4-btn tina4-btn-primary tina4-btn-sm" onclick="app.deploy()">+ New project</button></div>
+      <table style="width:100%;border-collapse:collapse">
+        <tr style="color:var(--tina-muted);font-size:12px;text-align:left"><th style="padding:8px 0">Project</th><th>Environment</th><th>Status</th><th style="text-align:right">Latency</th></tr>
+        <tr style="border-top:1px solid var(--tina-border)"><td style="padding:12px 0">Customer API</td><td>production</td><td><span class="tina4-badge tina4-badge-success">Healthy</span></td><td style="text-align:right">42 ms</td></tr>
+        <tr style="border-top:1px solid var(--tina-border)"><td style="padding:12px 0">Invoicing worker</td><td>production</td><td><span class="tina4-badge tina4-badge-warning">Review</span></td><td style="text-align:right">88 ms</td></tr>
+        <tr style="border-top:1px solid var(--tina-border)"><td style="padding:12px 0">Marketing site</td><td>staging</td><td><span class="tina4-badge tina4-badge-success">Healthy</span></td><td style="text-align:right">31 ms</td></tr>
+      </table>
+      <div id="note" style="color:var(--tina-muted);font-size:12px;margin-top:12px"></div>
+    </div>
+
+  </main>
+</body></html>

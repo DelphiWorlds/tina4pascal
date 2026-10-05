@@ -13,6 +13,14 @@ ROOT="$(cd "$SELF/.." && pwd)"
 SRC="$ROOT/src"
 BUILD="$ROOT/build"
 
+# Compiled units NEVER belong in src/ — they go to a build/unit-output dir via -FU.
+# But a stray in-place `fpc` (an IDE, an old script, a manual compile) can drop a
+# .ppu/.o beside a .pas, and because every compile passes -Fu"$SRC", FPC then
+# REUSES that stale unit instead of recompiling the edited source — so the engine
+# silently renders old code no matter how often you rebuild. Wipe them before any
+# engine compile; src/ is source-only, so this can only remove shadowing junk.
+clean_src_units() { rm -f "$SRC"/*.ppu "$SRC"/*.o 2>/dev/null || true; }
+
 # Per-machine toolchain cache: one place `setup` downloads everything into, shared
 # by every project and never committed. A project pins tool VERSIONS (tina4.json);
 # the CLI resolves the PATHS here so `git clone && tina4pascal setup && build` works
@@ -190,10 +198,28 @@ cmd_setup() {
   case "$what" in
     fpc)     setup_fpc ;;
     android) setup_android ;;
-    ios)     setup_ios ;;
+    ios)     if [ "${2:-}" = "--tunnel-nopasswd" ]; then setup_ios_nopasswd; else setup_ios; fi ;;
     all)     setup_fpc; setup_android; setup_ios ;;
     *) die "setup: unknown component '$what' (fpc | android | ios | all)" ;;
   esac
+}
+
+# Opt-in: let `remote start-tunnel` run under sudo with NO password prompt, so iOS
+# screenshots/logs never ask again (even across reboots). Installs a narrowly-
+# scoped /etc/sudoers.d rule for THIS user and the pymobiledevice3 tunnel command
+# only, validated with visudo before install. One sudo prompt to write it; none
+# after. Remove it with: sudo rm /etc/sudoers.d/tina4-ios-tunnel
+setup_ios_nopasswd() {
+  _pmd="$(command -v pymobiledevice3 2>/dev/null || echo "$HOME/.local/bin/pymobiledevice3")"
+  [ -x "$_pmd" ] || die "pymobiledevice3 not installed — run: tina4pascal setup ios"
+  _rule="$(id -un) ALL=(root) NOPASSWD: $_pmd remote start-tunnel *"
+  _tmp="$(mktemp)"; printf '%s\n' "$_rule" > "$_tmp"
+  visudo -cf "$_tmp" >/dev/null 2>&1 || { rm -f "$_tmp"; die "generated sudoers rule failed validation (not installed)"; }
+  say "→ installing a NOPASSWD sudoers rule for the iOS tunnel (one sudo prompt)…"
+  say "  ${D}$_rule${Z}"
+  sudo install -m 0440 "$_tmp" /etc/sudoers.d/tina4-ios-tunnel || { rm -f "$_tmp"; die "could not write /etc/sudoers.d/tina4-ios-tunnel"; }
+  rm -f "$_tmp"
+  ok "done — iOS screenshots/logs no longer prompt. Remove with: sudo rm /etc/sudoers.d/tina4-ios-tunnel"
 }
 
 # iOS build + on-device debug tooling. Xcode itself is a manual install; this
@@ -313,6 +339,46 @@ if not have_main:
         "  RunApp('" + name.replace("'", "''") + "', GetCurrentDir, 'app.html', '{}', '', 480, 640);\n"
         "end.\n")
     open(os.path.join(out, 'main.pas'), 'w', encoding='utf-8').write(prog)
+PY
+  printf '%s' "$_out"
+}
+
+# prepare_pages <dir> — weld every static page under <dir>/pages/ INTO the binary.
+# Each pages/**/*.html becomes a RegisterEmbeddedPageB64('<path-relative-to-pages>',
+# …) call in a generated unit (<dir>/.tina4/Tina4EmbeddedPages.pas). The renderer's
+# <include src>/view.load resolver checks the embedded store before disk, so the
+# app ships as a single executable with no assets folder. Echoes the .tina4 dir if
+# it generated a unit (caller adds -Fu + the unit name to uses), else "".
+prepare_pages() {
+  _d="$1"
+  [ -d "$_d/pages" ] || { printf ''; return 0; }
+  # any .html under pages/?
+  find "$_d/pages" -type f -name '*.html' | head -1 | grep -q . || { printf ''; return 0; }
+  _out="$_d/.tina4"; mkdir -p "$_out"
+  PAGES_DIR="$_d/pages" PAGES_OUT="$_out" python3 - <<'PY' || return 1
+import os, base64, glob
+pdir = os.environ['PAGES_DIR']; out = os.environ['PAGES_OUT']
+lines = []
+for path in sorted(glob.glob(os.path.join(pdir, '**', '*.html'), recursive=True)):
+    name = os.path.relpath(path, pdir).replace(os.sep, '/')
+    data = open(path, 'rb').read()
+    b64 = base64.b64encode(data).decode('ascii')
+    chunks = [b64[i:i+100] for i in range(0, len(b64), 100)] or ['']
+    lit = (" +\n    ").join("'%s'" % c for c in chunks)
+    lines.append("  RegisterEmbeddedPageB64('%s',\n    %s);" % (name.replace("'", "''"), lit))
+unit = (
+    "unit Tina4EmbeddedPages;\n"
+    "{ GENERATED from pages/ by `tina4pascal pages` — do not edit by hand.\n"
+    "  Each static page is welded into the binary; the renderer serves it to\n"
+    "  <include src>/view.load before touching disk. }\n"
+    "{$mode delphi}{$H+}\n"
+    "interface\n"
+    "implementation\n"
+    "uses Tina4Pages;\n"
+    "initialization\n"
+    + "\n".join(lines) + "\n"
+    "end.\n")
+open(os.path.join(out, 'Tina4EmbeddedPages.pas'), 'w', encoding='utf-8').write(unit)
 PY
   printf '%s' "$_out"
 }
@@ -516,6 +582,10 @@ build_project() {
   # name given and does NOT append it) — otherwise the artifact can't run on
   # Windows and signtool/osslsigncode won't treat it as a PE.
   outname="$name"; case "$target" in windows|win64) outname="$name.exe";; esac
+  # Weld any pages/ into the binary (main.pas opts in with `uses Tina4EmbeddedPages`)
+  bppaged="$(prepare_pages "$PWD")"
+  [ -n "$bppaged" ] && extra="$extra -Fu$bppaged"
+  clean_src_units   # never let a stray src/*.ppu shadow an engine edit
   say "${D}fpc $opts $flags $main${Z}"
   # project unit dirs: root + src, src/app, src/services (the same set the mobile
   # staging adds, so a unit like src/AppLogic.pas is found on every target);
@@ -608,10 +678,14 @@ proj_android_build() {
   # the iOS staging (proj_ios_stage) and the Windows CLI's android path.
   aappinc=""; aappdirs=""
   for u in $(jget_list appUnits); do aappinc="$aappinc, $u"; done
+  # pages/ → embedded-pages unit, auto-added to the uses splice (single-binary pages)
+  apaged="$(prepare_pages "$PWD")"
+  [ -n "$apaged" ] && aappinc="$aappinc, Tina4EmbeddedPages"
   printf '%s' "$aappinc" > "$host/jni/app_units.inc"      # BOM-free; empty ⇒ reference shell
   for d in "$PWD" "$PWD/src" "$PWD/src/app" "$PWD/src/services"; do
     [ -d "$d" ] && aappdirs="$aappdirs -Fu$d"
   done
+  [ -n "$apaged" ] && aappdirs="$aappdirs -Fu$apaged"
 
   # 3. native lib(s) — compile the JNI bridge against the REPO engine (src) plus
   #    the shared 3d units (ThreePascal) and the project's own app-units.
@@ -800,10 +874,14 @@ proj_ios_stage() {
   # Android JNI path (android/jni/app_units.inc).
   iappinc=""; iappdirs=""
   for u in $(jget_list appUnits); do iappinc="$iappinc, $u"; done
+  # pages/ → embedded-pages unit, auto-added to the uses splice (single-binary pages)
+  ipaged="$(prepare_pages "$PWD")"
+  [ -n "$ipaged" ] && iappinc="$iappinc, Tina4EmbeddedPages"
   printf '%s' "$iappinc" > "$ihost/app_units.inc"      # BOM-free; empty ⇒ reference shell
   for d in "$PWD" "$PWD/src" "$PWD/src/app" "$PWD/src/services"; do
     [ -d "$d" ] && iappdirs="$iappdirs -Fu$d"
   done
+  [ -n "$ipaged" ] && iappdirs="$iappdirs -Fu$ipaged"
   say "→ building iOS engine (libtina4ios.a)…"
   PPC_CONFIG_PATH="$FPC_HOME/etc" PATH="$FPC_HOME/bin:$PATH" \
     TINA4_IOS_ENG_DIR="$ihost" TINA4_SRC="$ROOT/src" \
@@ -1215,7 +1293,8 @@ EOF
 cmd_test() {
   need_fpc
   fail=0
-  for t in dom highlight codearea flexrebuild qr svg picture services http docs frond pseudo media webp pdf scanner barcode crypto auth rbacui authflow secrets ssoflow share_items location; do
+  clean_src_units   # never let a stray src/*.ppu shadow an engine edit
+  for t in dom highlight codearea flexrebuild includes qr svg picture services http docs frond pseudo media webp pdf scanner barcode crypto auth rbacui authflow secrets ssoflow share_items location; do
     [ -f "$ROOT/tests/test_$t.pas" ] || continue
     o="$BUILD/test/$t"; mkdir -p "$o"
     "$FPC" -Mdelphi -Fu"$SRC" -FE"$o" -FU"$o" "$ROOT/tests/test_$t.pas" >/dev/null 2>&1 \
@@ -1243,6 +1322,7 @@ cmd_run() {
 cmd_macos() {
   need_fpc
   o="$BUILD/macos-app"; mkdir -p "$o"
+  clean_src_units   # never let a stray src/*.ppu shadow an engine edit
   say "${D}fpc examples/macos/main.pas${Z}"
   "$FPC" -Mdelphi -O2 -Xs -Fu"$SRC" -FE"$o" -FU"$o" -o"$o/Tina4Pascal" \
     "$ROOT/examples/macos/main.pas" 2>&1 | grep -Ei "error|fatal" && die "build failed" || true
@@ -1287,6 +1367,8 @@ cmd_new() {
   mkdir -p "$name/src"
   cp "$ROOT/examples/starter/app.html" "$name/app.html"
   cp "$ROOT/examples/starter/src/AppLogic.pas" "$name/src/AppLogic.pas"
+  # default stylesheet — bundled in assets/ so it ships into the mobile app too
+  [ -d "$ROOT/examples/starter/assets" ] && { mkdir -p "$name/assets"; cp -R "$ROOT/examples/starter/assets/." "$name/assets/"; }
   sed "s/My Tina4 App/$name/g" "$ROOT/examples/starter/main.pas" > "$name/main.pas"
   sed -e "s/My Tina4 App/$name/g" -e "s#com\.tina4\.myapp#$bid#" \
       "$ROOT/examples/starter/tina4.json" > "$name/tina4.json"
@@ -1296,6 +1378,18 @@ cmd_new() {
 }
 
 # build + run an app folder's main.pas on macOS (edit app.html, re-run to see)
+# Generate (or refresh) the embedded-pages unit from ./pages/ and report. The
+# build does this automatically; this command is for inspecting the result.
+cmd_pages() {
+  d="${1:-.}"
+  [ -d "$d/pages" ] || die "no pages/ folder in '$d' — put static .html screens there"
+  out="$(prepare_pages "$d")"
+  [ -n "$out" ] || die "no .html files under '$d/pages'"
+  n="$(find "$d/pages" -type f -name '*.html' | wc -l | tr -d ' ')"
+  ok "welded $n page(s) → $out/Tina4EmbeddedPages.pas"
+  say "  add ${D}uses Tina4EmbeddedPages;${Z} to main.pas (desktop); on mobile it is auto-wired."
+}
+
 cmd_dev() {
   d="${1:-.}"
   need_fpc
@@ -1309,15 +1403,56 @@ cmd_dev() {
       die "no main.pas in '$d' (scaffold one: tina4pascal new <name>, or add <script type=\"text/pascal\"> to app.html)"
     fi
   fi
+  # Weld any pages/ into the binary → <dir>/.tina4/Tina4EmbeddedPages.pas. The
+  # project main.pas opts in with `uses Tina4EmbeddedPages;` (auto on mobile).
+  paged="$(prepare_pages "$d")"
   o="$BUILD/dev"; mkdir -p "$o"
+  clean_src_units   # never let a stray src/*.ppu shadow an engine edit
+  # The dev unit cache ($BUILD/dev) is shared across runs. Compare edited engine
+  # sources against a CACHED ENGINE UNIT (not the relinked app binary, which is
+  # always newer than src and so never triggered) — if any .pas is newer, drop the
+  # cached units so FPC recompiles the engine fresh and a relaunch shows the change.
+  ref="$o/tina4htmllayout.ppu"
+  if [ -f "$ref" ] && [ -n "$(find "$SRC" -name '*.pas' -newer "$ref" 2>/dev/null | head -1)" ]; then
+    rm -f "$o"/*.ppu "$o"/*.o 2>/dev/null || true
+  fi
   extra=""
   [ -n "$inlined" ] && extra="-Fu$inlined"
+  [ -n "$paged" ] && extra="$extra -Fu$paged"
   [ -d "$d/src" ] && extra="$extra -Fu$d/src"
   say "${D}fpc $(basename "$d") → app${Z}"
   # shellcheck disable=SC2086
   "$FPC" -Mdelphi -O2 -Xs -Fu"$SRC" $extra -FE"$o" -FU"$o" -o"$o/app" "$main" 2>&1 \
     | grep -Ei "error|fatal" && die "build failed" || true
-  ( cd "$d" && exec "$o/app" )   # runs from the app folder (app.html + localStore)
+  # Wrap the binary in a minimal .app so macOS shows the project NAME + ICON in the
+  # Dock instead of a generic "exec". We still exec the inner Mach-O directly (not
+  # `open`) from the app folder, so the cwd stays the project dir — app.html,
+  # assets/ and localStore resolve exactly as before — while LaunchServices reads
+  # the enclosing bundle for its identity. Fixes the "exec" Dock icon/name.
+  dname="$(cd "$d" && jget name "$(basename "$(pwd)")")"
+  dbid="$(cd "$d" && jget bundleId "com.tina4.$dname")"
+  dapp="$o/$dname.app"; rm -rf "$dapp"
+  mkdir -p "$dapp/Contents/MacOS" "$dapp/Contents/Resources"
+  cp "$o/app" "$dapp/Contents/MacOS/$dname"
+  if [ -f "$d/assets/icon.icns" ]; then cp "$d/assets/icon.icns" "$dapp/Contents/Resources/AppIcon.icns"
+  elif [ -f "$ROOT/branding/AppIcon.icns" ]; then cp "$ROOT/branding/AppIcon.icns" "$dapp/Contents/Resources/AppIcon.icns"; fi
+  cat > "$dapp/Contents/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleExecutable</key><string>$dname</string>
+  <key>CFBundleIdentifier</key><string>$dbid</string>
+  <key>CFBundleName</key><string>$dname</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>1.0</string>
+  <key>NSHighResolutionCapable</key><true/>
+  <key>LSMinimumSystemVersion</key><string>10.13</string>
+  <key>NSMicrophoneUsageDescription</key><string>Record audio from a &lt;recorder&gt; element.</string>
+  <key>NSCameraUsageDescription</key><string>Capture photos and scan codes from &lt;camera&gt; / scanner elements.</string>
+</dict></plist>
+PLIST
+  ( cd "$d" && exec "$dapp/Contents/MacOS/$dname" )   # app folder = cwd (app.html + localStore)
 }
 
 cmd_snapshot() {
@@ -1595,15 +1730,24 @@ cmd_ios() {
 #  the app before a screenshot.)
 cmd_launch() {
   plat="${1:-ios}"
+  # Inside a project, target the project's OWN bundle id (tina4.json "bundleId",
+  # default com.tina4.<name>) — not the reference app. Outside, use the defaults.
+  _pbid=""
+  if is_project 2>/dev/null; then
+    _pname="$(jget name "$(basename "$PWD")")"
+    _pbid="$(jget bundleId "com.tina4.$_pname")"
+  fi
   case "$plat" in
     ios)
       udid="$(ios_udid)"; [ -n "$udid" ] || die "no iOS device attached (idevice_id / devicectl)"
-      xcrun devicectl device process launch --terminate-existing --device "$udid" "$IOS_BUNDLE" >/dev/null 2>&1 \
+      _b="${_pbid:-$IOS_BUNDLE}"
+      xcrun devicectl device process launch --terminate-existing --device "$udid" "$_b" >/dev/null 2>&1 \
         || die "launch failed (installed? iPhone unlocked?)"
-      ok "launched $IOS_BUNDLE on device" ;;
+      ok "launched $_b on device" ;;
     android)
-      adb shell monkey -p "$ANDROID_PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 \
-        && ok "launched $ANDROID_PKG" || die "launch failed (installed? emulator/device up?)" ;;
+      _b="${_pbid:-$ANDROID_PKG}"
+      adb shell monkey -p "$_b" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 \
+        && ok "launched $_b" || die "launch failed (installed? emulator/device up?)" ;;
     macos)
       open "$ROOT/examples/htmlviewer/htmlviewer" 2>/dev/null && ok "launched macOS viewer" || die "build macos first" ;;
     *) die "launch: unsupported target '$plat' (ios|android|macos)" ;;
@@ -1732,12 +1876,14 @@ cmd_emulator() {
   esac
 }
 
-# ---- iOS RemoteXPC tunnel (no root) -----------------------------------------
+# ---- iOS RemoteXPC tunnel ---------------------------------------------------
 # iOS 17+ developer services (screenshot, syslog) run over a RemoteXPC tunnel.
-# `pymobiledevice3 remote tunneld` (the daemon) needs ROOT; `remote start-tunnel`
-# uses Apple's NATIVE tunnel on macOS with NO root. We keep one background
-# start-tunnel alive and cache its RSD addr/port so repeated screenshot/logs
-# calls reuse it. State lives under $TINA4_HOME (default ~/.tina4).
+# `remote start-tunnel` can use Apple's NATIVE tunnel with NO root on some macOS
+# / pymobiledevice3 combos, but newer ones need ROOT to create the utun iface.
+# We try no-root first, then fall back to sudo (one prompt), keep the tunnel
+# alive, and cache its RSD addr/port so every later screenshot/logs call reuses
+# it with no further prompt. For a ZERO-prompt setup see `tina4pascal setup ios
+# --tunnel-nopasswd`. State lives under $TINA4_HOME (default ~/.tina4).
 TINA4_STATE="${TINA4_HOME:-$HOME/.tina4}"
 ios_tunnel_rsd() {  # echo "<addr> <port>" if a cached tunnel is still alive, else nothing (always exits 0 — set -e safe)
   _pf="$TINA4_STATE/ios-tunnel.pid"; _rf="$TINA4_STATE/ios-tunnel.rsd"
@@ -1756,22 +1902,37 @@ ios_ensure_tunnel() {  # prints "<addr> <port>" to STDOUT; progress/errors to ST
   if ! { [ -x "$PMD3" ] || command -v pymobiledevice3 >/dev/null 2>&1; }; then
     echo "pymobiledevice3 missing — run: tina4pascal setup ios" >&2; return 1
   fi
-  mkdir -p "$TINA4_STATE"; _log="$TINA4_STATE/ios-tunnel.log"; : > "$_log"
-  say "→ starting iOS tunnel (remote start-tunnel, no root)…" >&2
-  nohup "$PMD3" remote start-tunnel >"$_log" 2>&1 &
-  echo $! > "$TINA4_STATE/ios-tunnel.pid"
-  _i=0
-  while [ "$_i" -lt 60 ]; do
-    _addr="$(awk '/RSD Address:/{print $NF; exit}' "$_log")"
-    _port="$(awk '/RSD Port:/{print $NF; exit}' "$_log")"
-    if [ -n "$_addr" ] && [ -n "$_port" ]; then
-      printf '%s %s' "$_addr" "$_port" > "$TINA4_STATE/ios-tunnel.rsd"
-      printf '%s %s' "$_addr" "$_port"
-      return 0
+  _pmd="$PMD3"; [ -x "$_pmd" ] || _pmd="$(command -v pymobiledevice3)"
+  mkdir -p "$TINA4_STATE"; _log="$TINA4_STATE/ios-tunnel.log"
+  # Attempt 1: no root. Attempt 2 (if that logs a root error): sudo, which prompts
+  # once in the terminal (or runs silently under a NOPASSWD sudoers rule).
+  for _mode in plain sudo; do
+    : > "$_log"
+    if [ "$_mode" = plain ]; then
+      say "→ starting iOS tunnel (remote start-tunnel, no root)…" >&2
+      nohup "$_pmd" remote start-tunnel >"$_log" 2>&1 &
+    else
+      say "→ tunnel needs root — starting with sudo (enter your password if asked)…" >&2
+      nohup sudo "$_pmd" remote start-tunnel >"$_log" 2>&1 &
     fi
-    sleep 0.5; _i=$((_i + 1))
+    echo $! > "$TINA4_STATE/ios-tunnel.pid"
+    _i=0
+    while [ "$_i" -lt 60 ]; do
+      _addr="$(awk '/RSD Address:/{print $NF; exit}' "$_log")"
+      _port="$(awk '/RSD Port:/{print $NF; exit}' "$_log")"
+      if [ -n "$_addr" ] && [ -n "$_port" ]; then
+        printf '%s %s' "$_addr" "$_port" > "$TINA4_STATE/ios-tunnel.rsd"
+        printf '%s %s' "$_addr" "$_port"
+        return 0
+      fi
+      # bail early to the sudo attempt the moment the root error shows
+      if [ "$_mode" = plain ] && grep -qi 'root privileges' "$_log"; then break; fi
+      sleep 0.5; _i=$((_i + 1))
+    done
+    kill "$(cat "$TINA4_STATE/ios-tunnel.pid" 2>/dev/null || true)" 2>/dev/null || true
+    # only advance to the sudo attempt if the plain one actually needed root
+    grep -qi 'root privileges' "$_log" || break
   done
-  kill "$(cat "$TINA4_STATE/ios-tunnel.pid" 2>/dev/null || true)" 2>/dev/null || true
   rm -f "$TINA4_STATE/ios-tunnel.pid" "$TINA4_STATE/ios-tunnel.rsd"
   echo "iOS tunnel did not come up — see $_log (iPhone paired + unlocked?)" >&2; return 1
 }
@@ -1972,6 +2133,7 @@ ${B}build & test${Z}
 ${B}start an app${Z}
   new <name>             scaffold a starter app (app.html + main.pas)
   dev [dir]              build + run an app folder on macOS (default: .)
+  pages [dir]            weld ./pages/*.html into the binary (embedded page store)
 
 ${B}macOS run${Z}
   macos [--run]          build the native macOS .app (same engine as mobile)
@@ -2013,7 +2175,8 @@ ${B}debug loop${Z}
 
 ${B}drive the app${Z}  (the device-automation the IDE builds on)
   screenshot <target> [out.png]   grab the app screen  (android · ios · macos)
-  ios-tunnel [start|status|stop]  manage the no-root iOS RemoteXPC tunnel
+  ios-tunnel [start|status|stop]  manage the iOS RemoteXPC tunnel (sudo if needed;
+                                  `setup ios --tunnel-nopasswd` for zero prompts)
                                   (auto-started by screenshot/logs ios)
   tap <target> X Y                click/tap at screen coords
   swipe <target> X1 Y1 X2 Y2 [ms] scroll / drag
@@ -2037,6 +2200,7 @@ case "$cmd" in
   test)       cmd_test "$@" ;;
   new)        cmd_new "$@" ;;
   dev)        cmd_dev "$@" ;;
+  pages)      cmd_pages "$@" ;;
   macos)      cmd_macos "$@" ;;
   run)        if is_project; then run_project "$@"; else cmd_run "$@"; fi ;;
   render)     if is_project; then render_project "$@"; else die "render: run inside a project dir"; fi ;;

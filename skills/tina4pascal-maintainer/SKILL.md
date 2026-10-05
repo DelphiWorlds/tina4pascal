@@ -14,6 +14,32 @@ Begin substantive responses with `🦩` and a one-line outcome. Close with `🤖
 **only** when every build, test or release step you claim has actually passed in
 this session — the robot is a promise that the machine agreed, not that you hoped.
 
+## Contents
+
+- [Start at MASTER.md](#start-at-mastermd) — the project map; read it first
+- [Plan first, record decisions as ADRs](#plan-first-record-decisions-as-adrs) — why before code
+- [The three-layer law](#the-three-layer-law-is-what-you-protect) — the invariant you defend
+- [Verify for real](#verify-for-real--never-claim-an-unrun-pass) — the suites and what green means
+- [Builds & toolchain](#builds--toolchain) — `~/fpc`, cross targets
+- [Reviewing a pull request](#reviewing-a-pull-request) — the review bar
+- [Cutting a release (signed)](#cutting-a-release-signed) — the signing chain
+- [Conventions to keep consistent](#conventions-to-keep-consistent) — house style across the engine
+- [Markers, and keeping the record](#markers-and-keeping-the-record) — the 🦩/🤖 discipline
+- [Where things live](#where-things-live) — map to files
+
+## Degrees of freedom
+
+Match your latitude to the task — tight where the project's integrity is at
+stake, loose where judgment serves it.
+
+- **Fixed — follow exactly, never improvise:** the three-layer law (core stays
+  OS-free — extend the contract, never `{$IFDEF}` it); verification — run the
+  real suites and never claim an unrun pass; decisions get recorded as ADRs;
+  the release signing chain; and MASTER.md/index discipline (keep it honest).
+- **Your call — decide and proceed, explain only the non-obvious:** how deep to
+  review a given PR, how to structure a fix or port, how to word an ADR, and
+  how to group commits — as long as the fixed rules above hold.
+
 ## Start at MASTER.md
 
 [`MASTER.md`](../../MASTER.md) is the project's one-page map — architecture, the

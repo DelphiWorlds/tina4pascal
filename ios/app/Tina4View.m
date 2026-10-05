@@ -25,6 +25,14 @@
 @property (assign, nonatomic) int scanIndex;
 @property (assign, nonatomic) BOOL scanStarting;
 @property (assign, nonatomic) NSTimeInterval scanLastAt;
+// native <camera-view> (embed kind 4): a live preview with NO decoder — the
+// un-decoded sibling of the scanner, for a monitor/feed. Same overlay model.
+@property (strong, nonatomic) AVCaptureSession *camSession;
+@property (strong, nonatomic) AVCaptureVideoPreviewLayer *camPreview;
+@property (strong, nonatomic) UIView *camView;
+@property (assign, nonatomic) int camIndex;
+@property (assign, nonatomic) BOOL camStarting;
+@property (copy,   nonatomic) NSString *camFacing;
 // native <video> overlays, keyed by source URL. Each is a full AVPlayerViewController
 // (native play/pause/scrub/fullscreen controls), positioned over the engine's black
 // poster box each frame (see -syncVideos:).
@@ -34,6 +42,7 @@
 // native <recorder>: mic capture to an AAC .m4a in the temp dir
 @property (strong, nonatomic) AVAudioRecorder *audioRecorder;
 @property (strong, nonatomic) NSString *audioRecPath;
+@property (strong, nonatomic) NSTimer *levelTimer;   // E1: drives the live VU meter while recording
 // engine-drawn <audio controls>: one AVAudioPlayer for the clip the user toggled,
 // with a display link pushing the elapsed fraction back so the bar advances.
 @property (strong, nonatomic) AVAudioPlayer *audioPlayer;
@@ -117,7 +126,7 @@
     // overlay/position native <video> players over their poster boxes. Do this
     // OFF the drawRect pass — mutating the layer tree (addSublayer) inside
     // drawRect is unreliable — so hop to the next main-loop turn.
-    dispatch_async(dispatch_get_main_queue(), ^{ [self syncVideos:s]; [self syncScanner:s]; });
+    dispatch_async(dispatch_get_main_queue(), ^{ [self syncVideos:s]; [self syncScanner:s]; [self syncCamera:s]; });
     // keep animating on-screen time-driven content (<lottie>) without needing a
     // fling — the display link paces itself and -tick repaints only the animated
     // region (setNeedsDisplayInRect).
@@ -345,6 +354,89 @@
     [self applyTorch:(tina4_embed_flags(found) & 1) != 0];   // torch attribute → flash
 }
 
+// ---- native <camera-view> (live preview, no decoder) ------------------
+// The engine lays out the camera-view as a black box (embed kind 4) and reports
+// its rect + `facing` (front/back). We run one AVCaptureSession with just a
+// camera input + preview layer (no metadata output), positioned over the box.
+
+- (AVCaptureDevice *)cameraForFacing:(NSString *)facing {
+    AVCaptureDevicePosition pos = [[facing lowercaseString] isEqualToString:@"front"]
+        ? AVCaptureDevicePositionFront : AVCaptureDevicePositionBack;
+    AVCaptureDevice *dev = [AVCaptureDevice defaultDeviceWithDeviceType:AVCaptureDeviceTypeBuiltInWideAngleCamera
+                                                             mediaType:AVMediaTypeVideo
+                                                              position:pos];
+    if (!dev) dev = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];  // fallback
+    return dev;
+}
+
+- (void)setupCameraForIndex:(int)idx facing:(NSString *)facing {
+    if (self.camStarting || self.camSession) return;
+    AVAuthorizationStatus st = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo];
+    if (st == AVAuthorizationStatusNotDetermined) {
+        self.camStarting = YES;
+        [AVCaptureDevice requestAccessForMediaType:AVMediaTypeVideo completionHandler:^(BOOL granted) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                self.camStarting = NO;
+                if (granted) { [self setNeedsDisplay]; }   // re-enter syncCamera with access
+            });
+        }];
+        return;
+    }
+    if (st != AVAuthorizationStatusAuthorized) return;      // denied — leave the black box
+
+    AVCaptureDevice *dev = [self cameraForFacing:facing];
+    if (!dev) return;
+    NSError *err = nil;
+    AVCaptureDeviceInput *in = [AVCaptureDeviceInput deviceInputWithDevice:dev error:&err];
+    if (!in) return;
+    AVCaptureSession *sess = [[AVCaptureSession alloc] init];
+    if ([sess canAddInput:in]) [sess addInput:in]; else return;
+
+    AVCaptureVideoPreviewLayer *prev = [AVCaptureVideoPreviewLayer layerWithSession:sess];
+    prev.videoGravity = AVLayerVideoGravityResizeAspectFill;
+    UIView *v = [[UIView alloc] initWithFrame:CGRectZero];
+    v.backgroundColor = [UIColor blackColor];
+    v.clipsToBounds = YES;
+    [v.layer addSublayer:prev];
+    [self addSubview:v];
+    self.camSession = sess; self.camPreview = prev; self.camView = v;
+    self.camIndex = idx; self.camFacing = facing;
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{ [sess startRunning]; });
+}
+
+- (void)teardownCamera {
+    if (!self.camSession) return;
+    AVCaptureSession *sess = self.camSession;
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{ [sess stopRunning]; });
+    [self.camView removeFromSuperview];
+    self.camView = nil; self.camPreview = nil; self.camSession = nil;
+    self.camIndex = -1; self.camFacing = nil;
+}
+
+- (void)syncCamera:(UIEdgeInsets)s {
+    int n = tina4_embed_count();
+    int found = -1; float x = 0, y = 0, w = 0, h = 0;
+    for (int i = 0; i < n; i++) {
+        if (tina4_embed_kind(i) == 4) { found = i; tina4_embed_rect(i, &x, &y, &w, &h); break; }
+    }
+    if (found < 0) { [self teardownCamera]; return; }
+    if (w <= 0 || h <= 0) return;
+    // facing lives in the embed's "formats" slot (set by the engine for kind 4)
+    char fb[32] = {0}; tina4_embed_formats(found, fb, (int)sizeof(fb));
+    NSString *facing = [NSString stringWithUTF8String:fb];
+    if (facing.length == 0) facing = @"back";
+    // a facing change restarts the session on the other camera
+    if (self.camSession && self.camFacing && ![self.camFacing isEqualToString:facing]) [self teardownCamera];
+    if (!self.camSession) { [self setupCameraForIndex:found facing:facing]; }
+    self.camIndex = found;
+    if (!self.camView) return;
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    self.camView.frame = CGRectMake(x + s.left, y + s.top, w, h);
+    self.camPreview.frame = self.camView.bounds;
+    [CATransaction commit];
+}
+
 - (void)captureOutput:(AVCaptureOutput *)output
     didOutputMetadataObjects:(NSArray<__kindof AVMetadataObject *> *)objs
               fromConnection:(AVCaptureConnection *)connection {
@@ -529,6 +621,29 @@
 // back with tina4_set_recording (or '' if permission/record fails, which rolls
 // the control back to idle). AVAudioSession is the iOS-only bit vs macOS.
 
+// E1: a steady timer repaints the VU meter while recording — the normal render
+// loop idles when there's no CSS animation, so the pushed level needs its own tick.
+- (void)startLevelTimer {
+    [self.levelTimer invalidate];
+    self.levelTimer = [NSTimer timerWithTimeInterval:0.05 target:self
+        selector:@selector(meterTick) userInfo:nil repeats:YES];
+    // common modes so it keeps ticking during scrolling/touch tracking too
+    [[NSRunLoop mainRunLoop] addTimer:self.levelTimer forMode:NSRunLoopCommonModes];
+}
+- (void)stopLevelTimer {
+    [self.levelTimer invalidate]; self.levelTimer = nil;
+    tina4_set_audio_level(0.0f); [self setNeedsDisplay];   // settle the bar to zero
+}
+- (void)meterTick {
+    if (!self.audioRecorder) { [self stopLevelTimer]; return; }
+    [self.audioRecorder updateMeters];
+    float db = [self.audioRecorder averagePowerForChannel:0];  // ~ -160 (silence) .. 0 (max)
+    float lvl = (db + 50.0f) / 50.0f;                          // map -50..0 dB → 0..1
+    if (lvl < 0) lvl = 0; else if (lvl > 1) lvl = 1;
+    tina4_set_audio_level(lvl);
+    [self setNeedsDisplay];
+}
+
 - (void)startRecording {
     AVAudioSession *sess = [AVAudioSession sharedInstance];
     [sess setCategory:AVAudioSessionCategoryPlayAndRecord error:nil];
@@ -550,9 +665,12 @@
             self.audioRecorder = [[AVAudioRecorder alloc]
                 initWithURL:[NSURL fileURLWithPath:self.audioRecPath]
                 settings:settings error:&err];
+            self.audioRecorder.meteringEnabled = YES;   // E1: feed [data-vu] a live level
             if (!self.audioRecorder || err || ![self.audioRecorder record]) {
                 self.audioRecorder = nil;
                 tina4_set_recording("");   // failed → roll the <recorder> back to idle
+            } else {
+                [self startLevelTimer];    // E1: drive the live VU meter
             }
             [self setNeedsDisplay];
         });
@@ -560,6 +678,7 @@
 }
 
 - (void)stopRecording {
+    [self stopLevelTimer];   // E1: stop the VU feed
     if (!self.audioRecorder) { tina4_set_recording(""); [self setNeedsDisplay]; return; }
     [self.audioRecorder stop];
     self.audioRecorder = nil;

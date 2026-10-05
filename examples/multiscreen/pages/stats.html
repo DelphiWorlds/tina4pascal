@@ -1,0 +1,18 @@
+<!-- A whole screen authored as its own file under pages/ — WELDED INTO THE BINARY
+     by `tina4pascal pages` and served to view.load('stage','stats.html') before any
+     disk access. No assets folder, no files on device, no string constants in code. -->
+<section>
+  <h2 style="margin:0 0 8px">📊 Stats</h2>
+  <p style="color:#94a3b8;margin:0 0 16px">This screen lives in <code>pages/stats.html</code>
+  and is <b>compiled into the app</b> — loaded at runtime with no file on disk.</p>
+  <div style="display:flex;gap:12px">
+    <div style="flex:1;background:#1e293b;border-radius:12px;padding:16px">
+      <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:1px">Users</div>
+      <div style="font-size:30px;font-weight:700;margin-top:4px">1,284</div>
+    </div>
+    <div style="flex:1;background:#1e293b;border-radius:12px;padding:16px">
+      <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:1px">Sessions</div>
+      <div style="font-size:30px;font-weight:700;margin-top:4px">9,471</div>
+    </div>
+  </div>
+</section>

@@ -326,6 +326,13 @@ begin
   if TinaScanResult(Index, JToStr(Env, Value), JToStr(Env, Fmt)) then Result := 1 else Result := 0;
 end;
 
+{ E1: push the live mic level (0..1) from the Java recorder poll → drives [data-vu]. }
+procedure Java_com_tina4_pascal_Tina4View_nativeSetAudioLevel(Env: PJNIEnv;
+  This: jobject; Level: jfloat); cdecl;
+begin
+  TinaSetAudioLevel(Level);
+end;
+
 exports
   Java_com_tina4_pascal_Tina4View_nativeSetHtml,
   Java_com_tina4_pascal_Tina4View_nativePaint,
@@ -354,6 +361,7 @@ exports
   Java_com_tina4_pascal_Tina4View_nativeEmbedKind,
   Java_com_tina4_pascal_Tina4View_nativeEmbedFormats,
   Java_com_tina4_pascal_Tina4View_nativeScanResult,
+  Java_com_tina4_pascal_Tina4View_nativeSetAudioLevel,
   Java_com_tina4_pascal_Tina4Location_nativeLocationResult,
   Java_com_tina4_pascal_Http_nativeHttpResult,
   Java_com_tina4_pascal_ImageLoader_nativeImageReady,

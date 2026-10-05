@@ -46,6 +46,24 @@ const
 procedure TinaInit(Canvas: TTina4Canvas);
 { Load a document ("@demo" = the built-in interactive demo). }
 procedure TinaSetHtml(const Html: string);
+{ ---- Runtime view swapping (multi-screen apps) -------------------------
+  Replace the children of the element #ContainerId with a parsed HTML fragment,
+  live, without reloading the whole document — the building block for a single
+  page that presents many screens. The fragment's own <style> blocks and any
+  nested <include src> resolve too. Layout re-runs on the next frame.
+    TinaSetViewHtml — splice an in-memory fragment (built in code / templated).
+    TinaLoadView    — load the fragment from a local file or an http(s) URL
+                      (local reads synchronously; a URL fetches async and swaps
+                      in when it arrives, like <include src>).
+    TinaShowView    — clone the content of an inline <template id=SourceId> into
+                      the container, so every screen can live in ONE self-
+                      contained HTML file (no extra files, nothing to bundle).
+  All no-op safely when #ContainerId (or the template) is absent.
+  From HTML alone — no app code — the same three are the built-in actions
+  view.load('container','src') and view.show('container','template-id'). }
+procedure TinaSetViewHtml(const ContainerId, Html: string);
+procedure TinaLoadView(const ContainerId, Src: string);
+procedure TinaShowView(const ContainerId, SourceId: string);
 { ---- Frond templates ---------------------------------------------------
   Render a page from a Frond template + a JSON context (app state) and load it.
   The template is remembered, so on a state change you re-render with just the
@@ -113,6 +131,14 @@ procedure TinaSetPhoto(const Path: string);
   control simply disarms. The host calls this after StopAudioCapture returns. }
 procedure TinaSetRecording(const Path: string);
 
+{ Live mic input level (RMS 0.0..1.0), pushed by the shell each frame while a mic
+  is armed (a <recorder> capture or StartAudioMeter). The engine stores it and
+  drives every element carrying a `data-vu` attribute — their `width` is set to
+  level% — so a page gets a live VU meter with no app code: just
+  `<div data-vu style="height:12px;background:#22c55e"></div>` inside a track.
+  The E1 meter made visible on mobile (shells call the C/JNI bridge to this). }
+procedure TinaSetAudioLevel(L: Single);
+
 { <audio controls> playback — the engine draws the control (play/pause + progress)
   and, on a tap, returns TINA_AUDIO_TOGGLE. The shell then reads the source URL to
   play/pause with TinaAudioSrc, checks TinaAudioWantPlay to know which way the tap
@@ -138,6 +164,8 @@ procedure TinaInvalidateLayout;
   :root var overrides). The shell sets it from the OS appearance; relayout re-
   cascades. Off by default (light). }
 procedure TinaSetColorScheme(Dark: Boolean);
+{ Current dark/light state (read it to flip reliably: TinaSetColorScheme(not TinaDarkMode)). }
+function TinaDarkMode: Boolean;
 
 { Capture protection: while ON, every element marked class="sensitive" (or a
   <secure> tag) paints as a solid redaction bar — its content is never drawn.
@@ -210,7 +238,7 @@ implementation
 uses
   SysUtils, Classes, Math, DateUtils, Generics.Collections, fpjson, jsonparser,
   Tina4HTMLDom, Tina4HTMLLayout, Tina4Elements, Tina4Events, Tina4Frond, Tina4Http, Tina4Services,
-  Tina4Canvas2D, Tina4Builtins;
+  Tina4Canvas2D, Tina4Builtins, Tina4Pages;
 
 type
   TEmbedRec = record
@@ -241,6 +269,7 @@ var
   GDensity: Single = 1;
   GViewH: Single = 0;           // CSS px
   GScrollY: Single = 0;         // CSS px
+  GAudioLevel: Single = 0;      // live mic RMS 0..1, pushed by the shell (data-vu)
   // touch + momentum (all CSS px). A gesture locks onto GDragBox on touch-down
   // (an inner overflow scroller, or nil = the page) and flings on both axes.
   GDownX, GDownY, GLastX, GLastY: Single;
@@ -680,6 +709,34 @@ begin
   HttpGet(Trim(Args), @OnHttpResult);
 end;
 
+{ Split a two-argument action payload "'a', 'b'" into its unquoted parts, and drop
+  a leading '#' off an id so both view.load('screen',…) and ('#screen',…) work. }
+procedure SplitTwoArgs(const Args: string; out A, B: string);
+var p: Integer;
+begin
+  p := Pos(',', Args);
+  if p > 0 then begin A := Unquote(Trim(Copy(Args, 1, p - 1))); B := Unquote(Trim(Copy(Args, p + 1, MaxInt))); end
+  else begin A := Unquote(Trim(Args)); B := ''; end;
+  if (A <> '') and (A[1] = '#') then Delete(A, 1, 1);
+end;
+
+{ Built-in multi-screen navigation, callable straight from HTML with no app code:
+    onclick="view.load('screen','views/profile.html')"   // file or URL → container
+    onclick="view.show('screen','screen-profile')"        // inline <template> → container }
+procedure ActViewLoad(const Args: string);
+var a, b: string;
+begin
+  SplitTwoArgs(Args, a, b);
+  if (a <> '') and (b <> '') then TinaLoadView(a, b);
+end;
+
+procedure ActViewShow(const Args: string);
+var a, b: string;
+begin
+  SplitTwoArgs(Args, a, b);
+  if (a <> '') and (b <> '') then TinaShowView(a, b);
+end;
+
 procedure EnsureActions;
 begin
   if GActionsReady then Exit;
@@ -687,6 +744,8 @@ begin
   RegisterAction('Counter:Dec', @ActDec);
   RegisterAction('Counter:Reset', @ActReset);
   RegisterAction('Http:Get', @ActHttpGet);
+  RegisterAction('view.load', @ActViewLoad);   // multi-screen: file/URL → container
+  RegisterAction('view.show', @ActViewShow);   // multi-screen: <template> → container
   RegisterBuiltinActions;   // dialog.show/showModal/close + output.recalc
   GActionsReady := True;
 end;
@@ -719,6 +778,7 @@ end;
 var
   GIncSeq: Integer = 0;                 // unique marker per include
   GIncPending: TStringList = nil;       // reqId → "marker|src"
+  GViewPending: TStringList = nil;      // reqId → "containerId|src" (TinaLoadView)
 
 procedure LoadIncludes(Root: THTMLTag); forward;
 procedure InjectInclude(const Marker, Html: string); forward;
@@ -760,6 +820,15 @@ begin
     Result := FindByMarker(c, Marker);
     if Result <> nil then Exit;
   end;
+end;
+
+{ A src that goes over the network (fetched async via the HTTP backend). Anything
+  else — a relative or absolute disk path — is read straight off local storage. }
+function IsHttpUrl(const Src: string): Boolean;
+var s: string;
+begin
+  s := LowerCase(Src);
+  Result := (Pos('http://', s) = 1) or (Pos('https://', s) = 1);
 end;
 
 { Per-include auth header, from attributes (Frond can template the value in). }
@@ -855,7 +924,7 @@ begin
 end;
 
 procedure ProcessInclude(Node: THTMLTag);
-var src, hdrs, cached, marker: string; reqId: Integer;
+var src, hdrs, cached, marker, body: string; reqId: Integer;
 begin
   marker := Node.GetAttribute('data-tina4-inc');
   src := Trim(Node.GetAttribute('src'));
@@ -863,6 +932,24 @@ begin
   if CacheGet('inc:' + src, cached) then
   begin
     InjectInclude(marker, cached);                  // instant, from cache
+    Exit;
+  end;
+  // Local partial: an embedded page (compiled into the binary) wins over disk, so
+  // a single-binary app needs no files; otherwise read off the shell's asset/
+  // bundle base. Either way splice synchronously — only an http(s) src is async.
+  if not IsHttpUrl(src) then
+  begin
+    if TryGetEmbeddedPage(src, body) then
+      InjectInclude(marker, body)
+    else if (GCanvas <> nil) and GCanvas.ReadLocalFile(src, body) then
+    begin
+      CachePut('inc:' + src, body, 300);
+      InjectInclude(marker, body);
+    end
+    else
+      InjectInclude(marker,
+        '<div style="color:#b00020;font-size:12px;padding:6px">include not found: '
+        + src + '</div>');
     Exit;
   end;
   if GIncPending = nil then GIncPending := TStringList.Create;
@@ -883,6 +970,154 @@ begin
   finally
     list.Free;
   end;
+end;
+
+{ ---- Runtime view swapping (TinaSetViewHtml / TinaLoadView) ---------------
+  Replace the children of #ContainerId with a parsed fragment, live. Shares the
+  detach-and-splice shape of InjectInclude, but swaps a container's CONTENTS
+  rather than replacing a single <include> placeholder. }
+{ Deep-copy a source subtree's author fields (tag/text/attributes/inline style +
+  children). Pseudo/focus flags and computed style are rebuilt at layout, so they
+  are intentionally not copied. Used by TinaShowView to clone an inert <template>. }
+function CloneTag(Src: THTMLTag): THTMLTag;
+var k: string; i: Integer; cc: THTMLTag;
+begin
+  Result := THTMLTag.Create;
+  Result.TagName := Src.TagName;
+  Result.Text := Src.Text;
+  for k in Src.Attributes.Keys do Result.Attributes.AddOrSetValue(k, Src.Attributes[k]);
+  for k in Src.Style.Keys do Result.Style.AddOrSetValue(k, Src.Style[k]);
+  for i := 0 to Src.Children.Count - 1 do
+  begin
+    cc := CloneTag(Src.Children[i]);
+    cc.Parent := Result;
+    Result.Children.Add(cc);
+  end;
+end;
+
+{ Free #host's current children (the outgoing screen) and drop any focus / open
+  dropdown that pointed into them, so nothing dangles. Null each Parent first so
+  the self-detaching destructor doesn't mutate the list mid-free (as Parse does). }
+procedure ClearHostChildren(host: THTMLTag);
+var i: Integer;
+begin
+  GFocusedTag := nil;
+  GOpenSelect := nil;
+  for i := host.Children.Count - 1 downto 0 do
+  begin
+    host.Children[i].Parent := nil;
+    host.Children[i].Free;
+  end;
+  host.Children.Clear;
+end;
+
+procedure TinaSetViewHtml(const ContainerId, Html: string);
+var
+  host, c: THTMLTag; fragP: THTMLParser; newNodes: TList<THTMLTag>;
+  i, k: Integer;
+begin
+  if GParser = nil then Exit;
+  host := FindById(GParser.Root, ContainerId);
+  if host = nil then Exit;                 // unknown container → no-op
+  ClearHostChildren(host);
+  fragP := THTMLParser.Create;
+  newNodes := TList<THTMLTag>.Create;
+  try
+    fragP.Parse(Html);
+    if GSheet <> nil then                   // the view's own <style> blocks
+      for i := 0 to fragP.StyleBlocks.Count - 1 do
+        GSheet.AddCSS(fragP.StyleBlocks[i]);
+    while fragP.Root.Children.Count > 0 do  // detach so Free won't take them
+    begin
+      c := fragP.Root.Children[0];
+      fragP.Root.Children.Delete(0);
+      c.Parent := host;
+      newNodes.Add(c);
+      host.Children.Add(c);
+    end;
+    for k := 0 to newNodes.Count - 1 do     // any <include src> inside the view
+      LoadIncludes(newNodes[k]);
+  finally
+    newNodes.Free;
+    fragP.Free;
+  end;
+  GLayoutDirty := True;                      // relayout before the next paint
+end;
+
+procedure OnViewResult(const R: TTina4HttpResponse);
+var v, cid, src, msg: string; p: Integer;
+begin
+  if GViewPending = nil then Exit;
+  v := GViewPending.Values[IntToStr(R.Id)];
+  if v = '' then Exit;
+  GViewPending.Values[IntToStr(R.Id)] := '';
+  p := Pos('|', v);
+  cid := Copy(v, 1, p - 1); src := Copy(v, p + 1, MaxInt);
+  if R.Ok then
+  begin
+    CachePut('view:' + src, R.Body, 300);
+    TinaSetViewHtml(cid, R.Body);
+  end
+  else
+  begin
+    if R.Error <> '' then msg := R.Error else msg := 'HTTP ' + IntToStr(R.Status);
+    TinaSetViewHtml(cid,
+      '<div style="color:#b00020;font-size:12px;padding:6px">view failed: '
+      + msg + '</div>');
+  end;
+end;
+
+procedure TinaLoadView(const ContainerId, Src: string);
+var s, body, cached: string; reqId: Integer;
+begin
+  if GParser = nil then Exit;
+  s := Trim(Src);
+  if s = '' then Exit;
+  if not IsHttpUrl(s) then                   // embedded page → disk file → swap now
+  begin
+    if TryGetEmbeddedPage(s, body) then
+      TinaSetViewHtml(ContainerId, body)
+    else if (GCanvas <> nil) and GCanvas.ReadLocalFile(s, body) then
+      TinaSetViewHtml(ContainerId, body)
+    else
+      TinaSetViewHtml(ContainerId,
+        '<div style="color:#b00020;font-size:12px;padding:6px">view not found: '
+        + s + '</div>');
+    Exit;
+  end;
+  if CacheGet('view:' + s, cached) then      // http(s), warm cache → instant
+  begin
+    TinaSetViewHtml(ContainerId, cached);
+    Exit;
+  end;
+  if GViewPending = nil then GViewPending := TStringList.Create;
+  reqId := HttpGetEx(s, '', @OnViewResult);  // cold → fetch, swap on arrival
+  GViewPending.Values[IntToStr(reqId)] := ContainerId + '|' + s;
+end;
+
+procedure TinaShowView(const ContainerId, SourceId: string);
+var host, src, cc: THTMLTag; i: Integer; added: TList<THTMLTag>;
+begin
+  if GParser = nil then Exit;
+  host := FindById(GParser.Root, ContainerId);
+  src  := FindById(GParser.Root, SourceId);
+  if (host = nil) or (src = nil) then Exit;  // unknown container/template → no-op
+  ClearHostChildren(host);
+  added := TList<THTMLTag>.Create;
+  try
+    for i := 0 to src.Children.Count - 1 do  // clone (source <template> stays intact)
+    begin
+      cc := CloneTag(src.Children[i]);
+      cc.Parent := host;
+      host.Children.Add(cc);
+      added.Add(cc);
+    end;
+    for i := 0 to added.Count - 1 do         // resolve any <include src> in the clone
+      LoadIncludes(added[i]);
+  finally
+    added.Free;
+  end;
+  GLayoutDirty := True;
 end;
 
 { Full re-parse: build DOM + stylesheet + engine + layout. }
@@ -934,7 +1169,7 @@ begin
 end;
 
 procedure ParseDoc(W: Single);
-var i: Integer; GImportSL: TStringList;
+var i: Integer; GImportSL: TStringList; linkHref, linkCss: string;
 begin
   BlurAll;
   GActiveTag := nil; GHoverTag := nil;   // old DOM about to be freed — drop refs
@@ -948,6 +1183,24 @@ begin
   // registered custom elements' default CSS goes in FIRST (UA-like) so author
   // rules override it
   if ElementsDefaultCSS <> '' then GSheet.AddCSS(ElementsDefaultCSS);
+  // <link rel="stylesheet" href="…">: load each as a BASE sheet (before the page's
+  // own <style> so author rules win). Resolved like any other local resource —
+  // embedded page store → shell asset/bundle base (ReadLocalFile) → disk — so a
+  // default stylesheet (e.g. assets/tina4pascal.css) applies on desktop AND mobile.
+  for i := 0 to GParser.LinkHrefs.Count - 1 do
+  begin
+    linkHref := GParser.LinkHrefs[i]; linkCss := '';
+    if TryGetEmbeddedPage(linkHref, linkCss) then
+      GSheet.AddCSS(linkCss)
+    else if (GCanvas <> nil) and GCanvas.ReadLocalFile(linkHref, linkCss) then
+      GSheet.AddCSS(linkCss)
+    else if FileExists(linkHref) then
+    begin
+      GImportSL := TStringList.Create;
+      try GImportSL.LoadFromFile(linkHref); GSheet.AddCSS(GImportSL.Text);
+      finally GImportSL.Free; end;
+    end;
+  end;
   for i := 0 to GParser.StyleBlocks.Count - 1 do
     GSheet.AddCSS(GParser.StyleBlocks[i]);
   // @import: best-effort local-file load (drain by index → nested imports too).
@@ -2267,6 +2520,30 @@ begin
   GLayoutDirty := True;
 end;
 
+{ Recursively set the width of every [data-vu] element to L (0..1) as a percent. }
+procedure ApplyVuLevel(Node: THTMLTag; L: Single);
+var c: THTMLTag; w: Integer;
+begin
+  if Node = nil then Exit;
+  if Node.HasAttribute('data-vu') then
+  begin
+    w := Round(L * 100);
+    if w < 0 then w := 0 else if w > 100 then w := 100;
+    Node.Style.AddOrSetValue('width', IntToStr(w) + '%');
+  end;
+  for c in Node.Children do ApplyVuLevel(c, L);
+end;
+
+procedure TinaSetAudioLevel(L: Single);
+begin
+  GAudioLevel := L;
+  if GParser <> nil then
+  begin
+    ApplyVuLevel(GParser.Root, L);
+    GLayoutDirty := True;
+  end;
+end;
+
 { Effective source URL of an <audio> tag: its `src`, else the first <source src>. }
 function AudioSrcOf(Tag: THTMLTag): string;
 var sc: THTMLTag;
@@ -2326,6 +2603,14 @@ begin
   if Dark = GDarkMode then Exit;
   GDarkMode := Dark;
   GLayoutDirty := True;   // re-cascade: @media prefers-color-scheme rules change
+end;
+
+{ The engine's current dark/light state — so an app can flip it reliably
+  (TinaSetColorScheme(not TinaDarkMode)) instead of tracking its own copy, which
+  drifts from whatever the host set and makes the first toggle a no-op. }
+function TinaDarkMode: Boolean;
+begin
+  Result := GDarkMode;
 end;
 
 { ---- Native media embeds ---------------------------------------------- }
@@ -2488,5 +2773,6 @@ end;
 finalization
   GFrond.Free;
   GIncPending.Free;
+  GViewPending.Free;
 
 end.

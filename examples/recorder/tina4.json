@@ -1,0 +1,6 @@
+{
+  "name": "Recorder",
+  "bundleId": "com.tina4.recorder",
+  "main": "main.pas",
+  "appUnits": []
+}

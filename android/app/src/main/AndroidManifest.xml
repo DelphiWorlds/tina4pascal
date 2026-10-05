@@ -9,12 +9,15 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- E4: keep mic capture alive while backgrounded / screen-locked -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <application
         android:label="Tina4Pascal"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:allowBackup="true"
+        android:usesCleartextTraffic="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:supportsRtl="true">
         <activity
@@ -29,6 +32,10 @@
         <service android:name=".Tina4PushService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+        <!-- E4: foreground service that keeps mic capture alive while backgrounded -->
+        <service android:name=".Tina4CaptureService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
         <service android:name=".Tina4LocationService"
             android:exported="false"
             android:foregroundServiceType="location" />

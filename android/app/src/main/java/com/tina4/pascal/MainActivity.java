@@ -30,6 +30,8 @@ public class MainActivity extends Activity {
     private static final int REQ_MIC       = 4713;   // <recorder> RECORD_AUDIO
     private Tina4View view;
     private MediaRecorder recorder;                  // live <recorder> capture, null when idle
+    private final android.os.Handler levelHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private Runnable levelPoll;                       // E1: polls getMaxAmplitude → view.pushAudioLevel
     private String recPath;
     private boolean pendingRecord;                   // waiting on the mic permission dialog
 
@@ -149,6 +151,8 @@ public class MainActivity extends Activity {
             recorder.setOutputFile(recPath);
             recorder.prepare();
             recorder.start();
+            Tina4CaptureService.start(this);   // E4: keep mic alive while backgrounded/locked
+            startLevelPoll();                  // E1: feed the live VU meter
         } catch (Exception e) {
             if (recorder != null) { try { recorder.release(); } catch (Exception ignore) {} recorder = null; }
             recPath = null;
@@ -157,7 +161,31 @@ public class MainActivity extends Activity {
     }
 
     /** <recorder> tapped while armed: stop + hand the file back. */
+    /** E1: while recording, poll MediaRecorder.getMaxAmplitude() ~16x/s and push a
+     *  normalised 0..1 level into the engine so any [data-vu] element animates. */
+    private void startLevelPoll() {
+        stopLevelPoll();
+        levelPoll = new Runnable() {
+            public void run() {
+                if (recorder == null) return;
+                int amp = 0;
+                try { amp = recorder.getMaxAmplitude(); } catch (Exception ignore) {}
+                float lvl = Math.min(1f, (float) amp / 10000f);   // ~speech fills the bar
+                if (view != null) view.pushAudioLevel(lvl);
+                levelHandler.postDelayed(this, 60);
+            }
+        };
+        levelHandler.postDelayed(levelPoll, 60);
+    }
+
+    private void stopLevelPoll() {
+        if (levelPoll != null) { levelHandler.removeCallbacks(levelPoll); levelPoll = null; }
+        if (view != null) view.pushAudioLevel(0f);   // settle the meter to zero
+    }
+
     void stopRecording() {
+        stopLevelPoll();                       // E1: stop the VU feed
+        Tina4CaptureService.stop(this);        // E4: release the foreground slot
         String path = "";
         if (recorder != null) {
             try { recorder.stop(); path = recPath != null ? recPath : ""; }

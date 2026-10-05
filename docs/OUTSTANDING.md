@@ -140,10 +140,24 @@ low-quality hack.
 - **[S] `<video>` (macOS)** — `AVPlayerView` loop TODO + GUI-run verify pending.
 
 ## D. Capture stack (per-shell)
-- **[M] `<recorder>`** — macOS ✅; iOS (`AVAudioRecorder`+`AVAudioSession`) /
-  Android (`MediaRecorder`+`RECORD_AUDIO`) shell overrides are the follow-up.
-- **[M] `<camera-view>` preview** — core box + contract done; native preview +
-  frame grab per-shell (❌ everywhere).
+- **[done] `<recorder>`** — macOS ✅, iOS ✅, Android ✅ (issue #1 E3; mic →
+  `.m4a`, iOS+Android confirmed on device via `examples/recorder`).
+- **[done] E1 live mic meter** — `TinaSetAudioLevel(0..1)` drives any `[data-vu]`
+  element (a VU bar with no app code). Shells push it each frame while armed (iOS
+  `AVAudioRecorder` metering on a 20Hz timer; Android `getMaxAmplitude` poll → JNI).
+  **Confirmed on iOS + Android devices.** macOS meter session already existed.
+- **[done] E4 background capture** — survive screen-off/backgrounded: iOS
+  `UIBackgroundModes[audio]`; Android `Tina4CaptureService`
+  (`foregroundServiceType=microphone`) started/stopped with the recorder.
+  **Android verified on device** (recorded through a 5s screen-lock, service stayed
+  foreground, clip saved); iOS redeployed for locked-record confirmation.
+- **[done] `<camera-view>` preview** — core box + contract + engine enumeration
+  (embed kind 4) done; **iOS + Android native preview done + confirmed on device**
+  (iOS `Tina4View.m` `syncCamera:`; Android `Tina4Camera.java`). This is **full
+  parity with `<barcode-scanner>`** (both are live camera on iOS+Android; neither
+  has a desktop live preview). Future (shared with the scanner, not an E2 gap):
+  macOS/desktop live preview, and `GrabCameraFrame` (JPEG) for the streaming
+  follow-on.
 - **[M] `<barcode-scanner>` camera** — decode done (libzbar, desktop); camera
   preview/capture per-shell (❌).
 

@@ -1247,6 +1247,24 @@ begin
     Result := St.FontSize * 1.2;
 end;
 
+{ Half-leading: the slack between a line box of height H and the text's own em box
+  (ascent+descent), split so equal space sits above and below — a browser's rule
+  for placing a single line inside a taller box. One definition for every call
+  site; the ascent-centred and the run.Y variants below both build on it, so the
+  baseline maths lives in exactly one place. }
+function HalfLeading(const H: Single; const m: TTina4TextMetrics): Single; inline;
+begin
+  Result := (H - (m.Ascent + m.Descent)) / 2;
+end;
+
+{ Baseline offset from the top of a line box of height H for an inline item whose
+  font metrics are m: the half-leading, then the font ascent — so text of any size
+  on the line shares one baseline. }
+function InlineBaseline(const H: Single; const m: TTina4TextMetrics): Single; inline;
+begin
+  Result := HalfLeading(H, m) + m.Ascent;
+end;
+
 procedure TLayoutEngine.CollectInlineText(Tag: THTMLTag; SB: TStringBuilder);
 var
   c: THTMLTag;
@@ -1286,21 +1304,23 @@ begin
     Result.W := m.Width + padH;
   if ResolveSize(St.ExplicitHeight, 0) >= 0 then
     Result.H := St.ExplicitHeight + padV
-  else
-    // An inline element's background/padding box is sized by the font's content
-    // box (ascent+descent), NOT the author line-height — a `line-height:1.5`
-    // ancestor must not inflate a padded <span>/badge. Fall back to the line
-    // height only when there is no text metric.
-    if m.LineHeight > 0 then Result.H := m.LineHeight + padV
-    else Result.H := LineHeightOf(St) + padV;
+  // A PADDED/bordered/backgrounded inline box is sized by the font's content box
+  // (ascent+descent), NOT the author line-height — a `line-height:1.5` ancestor
+  // must not inflate a padded <span>/badge chip. But a BARE inline text run (no
+  // padding/border/own background — e.g. a flex item's label) takes the full line
+  // box = author line-height, like a browser; that extra leading balances the
+  // font's ascent/descent so a sibling (a status dot) centres on the glyph body.
+  else if (padV = 0) and (not St.BackgroundExplicit) then
+    Result.H := LineHeightOf(St)
+  else if m.LineHeight > 0 then Result.H := m.LineHeight + padV
+  else Result.H := LineHeightOf(St) + padV;
   if txt <> '' then
   begin
     run.Text := txt;
     run.X := St.BorderWidths.Left + St.Padding.Left; // relative for now
-    // centre the single line in the box (matches MakeControl) so a padded
-    // inline-block used as a button reads with even top/bottom padding
-    run.Y := Max(St.BorderWidths.Top,
-      (Result.H - St.FontSize) / 2);
+    // centre the glyph's OWN box (ascent+descent, per the backend metrics — not a
+    // FontSize-tall box) so top/bottom leading read as uniform half-leading.
+    run.Y := Max(St.BorderWidths.Top, HalfLeading(Result.H, m));
     run.FontSize := St.FontSize;
     run.Styles := FontStylesOf(St);
     run.Color := St.Color; run.LetterSpacing := 0;
@@ -1345,7 +1365,7 @@ begin
   Result.W := Max(baseW, rtW);
   Result.H := rtH + baseH;
   // base baseline measured from the box top (used for inline baseline alignment)
-  Result.RubyBaseline := rtH + (baseH - (bm.Ascent + bm.Descent)) / 2 + bm.Ascent;
+  Result.RubyBaseline := rtH + InlineBaseline(baseH, bm);
 
   if rtTxt <> '' then
   begin
@@ -2465,8 +2485,7 @@ begin
     // Centre the glyph's OWN box (ascent+descent, per the backend's metrics),
     // not a FontSize-tall box — those differ per font, which is what left the
     // "Choose File"/"Take Photo" captions off-centre on Core Text.
-    run.Y := Max(St.BorderWidths.Top,
-      (Result.H - (m.Ascent + m.Descent)) / 2);
+    run.Y := Max(St.BorderWidths.Top, HalfLeading(Result.H, m));
     if ph <> '' then run.Color := $FF9CA3AF else run.Color := St.Color; run.LetterSpacing := 0;
     if (kind = ckButton) or St.AppearanceNone then    // centre the caption
       run.X := (Result.W - m.Width) / 2;
@@ -2697,6 +2716,8 @@ var
   ridx: Integer;
   runText: string;   // accumulates a contiguous text run → anonymous flex item
   mL, mR, mT, mB, availInner, ew, eh, mnh: Single;
+  savedCH, ehC: Single;   // save/restore FContainingH across this flex container
+  relDX, relDY: Single;   // position:relative offset applied to a flex item
   edgeL, edgeT, edgeR, edgeB, contentX, contentY, contentW, contentH: Single;
   isCol: Boolean;
   dir, jc, ai, ia: string;
@@ -2745,6 +2766,18 @@ begin
   edgeB := st.BorderWidths.Bottom + st.Padding.Bottom;
   contentX := box.X + edgeL; contentY := box.Y + edgeT;
   contentW := box.W - edgeL - edgeR;
+
+  // Expose this flex container's own definite content height as the containing
+  // block, so flex items resolve height:NN% against it (CSS: the flex container
+  // is their containing block). Without this a bar at height:35% in a fixed-
+  // height chart resolved against 0. Left unchanged when the height is auto.
+  savedCH := FContainingH;
+  ehC := ResolveSize(st.ExplicitHeight, FContainingH);
+  if ehC >= 0 then
+  begin
+    if SameText(st.BoxSizing, 'border-box') then FContainingH := Max(0, ehC - edgeT - edgeB)
+    else FContainingH := ehC;
+  end;
 
   dir := LowerCase(st.FlexDirection); if dir = '' then dir := 'row';
   isCol := (dir = 'column') or (dir = 'column-reverse');
@@ -3348,7 +3381,33 @@ begin
       natW := natW + flexGap * Max(0, items.Count - 1);
     end;
     if natW + edgeL + edgeR > box.NaturalW then box.NaturalW := natW + edgeL + edgeR;
+    // inline-flex / width:fit-content with an AUTO main size shrinks to its content
+    // (CSS), unlike block-level `display:flex` which fills the container. When the
+    // row is left-packed (justify-content:flex-start) and nothing flex-grew, the
+    // items already sit at their content positions, so trimming box.W to the
+    // content width is safe and leaves them in place. Fixes e.g. a `.tina4-badge`
+    // chip stretching across a table cell instead of hugging its label.
+    if (ew < 0) and (not isCol)
+       and ((LowerCase(st.Display) = 'inline-flex')
+            or ((st.ExplicitWidth < -2.5) and (st.ExplicitWidth > -3.5)))
+       and ((jc = 'flex-start') or (jc = 'start')) and (sumGrow = 0)
+       and (natW + edgeL + edgeR < box.W) then
+      box.W := natW + edgeL + edgeR;
+    // position:relative on a flex item — offset it visually (top/left/right/bottom)
+    // after flex placement, like the block path does. Lets e.g. a badge's dot be
+    // nudged to the text's optical centre. Does not change the space it reserved.
+    for i := 0 to items.Count - 1 do
+      if (items[i] <> nil) and SameText(items[i].Style.CSSPosition, 'relative') then
+      begin
+        relDX := 0; relDY := 0;
+        if items[i].Style.CSSLeft > -9998 then relDX := items[i].Style.CSSLeft
+        else if items[i].Style.CSSRight > -9998 then relDX := -items[i].Style.CSSRight;
+        if items[i].Style.CSSTop > -9998 then relDY := items[i].Style.CSSTop
+        else if items[i].Style.CSSBottom > -9998 then relDY := -items[i].Style.CSSBottom;
+        if (relDX <> 0) or (relDY <> 0) then ShiftBoxTree(items[i], relDX, relDY);
+      end;
   finally
+    FContainingH := savedCH;   // restore on every path (incl. the wrap early-Exits)
     // out-of-flow children: positioned against this flex box's padding box now
     // that it is sized (they never took part in the flex flow above). Done in the
     // finally so every early-Exit branch (column-/row-wrap) still places them.
@@ -4150,7 +4209,7 @@ var
     qm := FCanvas.MeasureText(Q, St.FontSize, FontStylesOf(St));
     FCanvas.FontFamily := '';
     qi.Text := Q; qi.Box := nil; qi.W := qm.Width; qi.H := LineHeightOf(St);
-    qi.Ascent := (qi.H - (qm.Ascent + qm.Descent)) / 2 + qm.Ascent;
+    qi.Ascent := InlineBaseline(qi.H, qm);
     qi.FontSize := St.FontSize; qi.Styles := FontStylesOf(St); qi.Color := St.Color;
     qi.LetterSpacing := St.LetterSpacing; qi.FontFamily := St.FontFamily; qi.FontWeight := St.FontWeight; qi.ShadowDX := St.TextShadowOffsetX; qi.ShadowDY := St.TextShadowOffsetY; if St.TextShadowActive then qi.ShadowColor := St.TextShadowColor else qi.ShadowColor := 0;
     ComputeDecor(St, qi.Styles, qi.DecorLines, qi.DecorStyle, qi.DecorColor, qi.DecorThickness, qi.DecorOffset);
@@ -4249,7 +4308,7 @@ var
     ti.Text := W; ti.Box := nil; ti.W := tm.Width; ti.H := LineHeightOf(St);
     if St.SmallCaps then ti.W := SmallCapsWidth(W, St);   // composite width of the case-runs
     ti.W := ti.W * StretchFactorOf(FontStylesOf(St));     // font-stretch advance
-    ti.Ascent := (ti.H - (tm.Ascent + tm.Descent)) / 2 + tm.Ascent;
+    ti.Ascent := InlineBaseline(ti.H, tm);
     ti.FontAscent := tm.Ascent;
     if SameText(St.VerticalAlign, 'sub') then
     begin ti.Ascent := ti.Ascent - St.FontSize * 0.28; ti.FontAscent := ti.FontAscent - St.FontSize * 0.28; end
@@ -4542,7 +4601,7 @@ var
           it.H := LineHeightOf(St);
           // baseline sits (lineHeight-fontHeight)/2 below the run top, then
           // ascent below that — so text of any size shares one baseline.
-          it.Ascent := (it.H - (m.Ascent + m.Descent)) / 2 + m.Ascent;
+          it.Ascent := InlineBaseline(it.H, m);
           // FontAscent is the FONT's own ascent (what the backend adds to a run
           // top to reach the baseline). Placing the run by FontAscent — not by
           // it.Ascent, which also carries the half-leading — makes the glyph

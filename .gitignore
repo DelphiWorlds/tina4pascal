@@ -41,7 +41,9 @@ examples/*/build/
 examples/*/sim/*.xcodeproj/
 examples/*/sim/shareitems.html
 examples/*/sim/app/
-# local FPC build/output dirs used when compiling examples/tests
+# macOS Finder metadata — never belongs in the repo
+.DS_Store
+# local FPC build/output dirs when compiling examples/tests
 _b/
 _rel/
 _chk/
