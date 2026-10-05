@@ -447,8 +447,10 @@ type
     TextOrientation: string;      // '' / 'mixed' (default) | 'upright' | 'sideways' (inherited; vertical modes)
     // CSS transforms (subset)
     TransformActive: Boolean;
-    TransformTranslateX: Single;
+    TransformTranslateX: Single;   // px part of the translate (calc markers resolved at paint)
     TransformTranslateY: Single;
+    TransformTranslateXPct: Single; // % part, resolved against the box's OWN width at paint
+    TransformTranslateYPct: Single; // % part, resolved against the box's OWN height at paint
     TransformRotate: Single;       // degrees clockwise
     TransformScaleX: Single;
     TransformScaleY: Single;
@@ -2680,6 +2682,8 @@ begin
   Result.BgGradientAngle := 0;
   Result.TransformTranslateX := 0;
   Result.TransformTranslateY := 0;
+  Result.TransformTranslateXPct := 0;
+  Result.TransformTranslateYPct := 0;
   Result.TransformRotate := 0;
   Result.AnimName := ''; Result.AnimDuration := 0; Result.AnimDelay := 0; Result.AnimIterCount := -1; Result.AnimTiming := 'ease'; Result.AnimDirection := 'normal'; Result.TransitionDuration := 0; Result.TransitionDelay := 0; Result.TransitionTiming := 'ease'; Result.TransitionProp := 'all';
 
@@ -3260,6 +3264,8 @@ begin
   Result.BgGradientAngle := 0;
   Result.TransformTranslateX := 0;
   Result.TransformTranslateY := 0;
+  Result.TransformTranslateXPct := 0;
+  Result.TransformTranslateYPct := 0;
   Result.TransformRotate := 0;
   Result.AnimName := ''; Result.AnimDuration := 0; Result.AnimDelay := 0; Result.AnimIterCount := -1; Result.AnimTiming := 'ease'; Result.AnimDirection := 'normal'; Result.TransitionDuration := 0; Result.TransitionDelay := 0; Result.TransitionTiming := 'ease'; Result.TransitionProp := 'all';
 
@@ -4190,6 +4196,22 @@ begin
   end;
 end;
 
+{ Accumulate one translate() argument into its px and % parts (CSS: a % in a
+  translate is a fraction of the element's OWN size, resolved at paint time;
+  everything else — px/em/rem/vw/vh/calc() — is a length). This keeps px and %
+  separate so the engine can replicate the browser's translate(-50%,-50%) and
+  compositions like translate(-50%,-50%) translate(12px,8px) exactly. }
+procedure AccumTranslateArg(const RawArg: string; EmSize: Single; var PxAcc, PctAcc: Single);
+var a: string;
+begin
+  a := RawArg.Trim;
+  if a = '' then Exit;
+  if a.EndsWith('%') then
+    PctAcc := PctAcc + StrToFloatDef(Copy(a, 1, Length(a) - 1).Trim, 0)
+  else
+    PxAcc := PxAcc + TComputedStyle.ParseLength(a, EmSize);
+end;
+
 class procedure TComputedStyle.ApplyDeclarations(Decls: TCSSDeclarations; var Style: TComputedStyle; const ParentStyle: TComputedStyle; GlobalVars: TDictionary<string, string>);
 var
   Temp: string;
@@ -4217,7 +4239,7 @@ var
   GP1, GP2: Integer;
   GColors: array of TAlphaColor;
   TfStr, FnName, ArgStr, AStr: string;
-  TfPos, NameStart, ArgStart: Integer;
+  TfPos, NameStart, ArgStart, TfDepth: Integer;
   tdTok, tdLine: string;
 
   function ShouldSkip(const V: string): Boolean;
@@ -5335,7 +5357,17 @@ begin
         FnName := TfStr.Substring(NameStart, TfPos - NameStart).Trim;
         Inc(TfPos); // skip '('
         ArgStart := TfPos;
-        while (TfPos < TfStr.Length) and (TfStr.Chars[TfPos] <> ')') do Inc(TfPos);
+        // Balance nested parens so a calc()/min()/max() argument (which has its
+        // own parens) isn't truncated at its inner ')'. The function's own
+        // closing ')' is the one at depth 0.
+        TfDepth := 0;
+        while (TfPos < TfStr.Length) and
+              ((TfStr.Chars[TfPos] <> ')') or (TfDepth > 0)) do
+        begin
+          if TfStr.Chars[TfPos] = '(' then Inc(TfDepth)
+          else if TfStr.Chars[TfPos] = ')' then Dec(TfDepth);
+          Inc(TfPos);
+        end;
         ArgStr := TfStr.Substring(ArgStart, TfPos - ArgStart);
         if TfPos < TfStr.Length then Inc(TfPos);  // skip ')'
         TfArgs := ArgStr.Split([',']);
@@ -5343,19 +5375,19 @@ begin
         if FnName = 'translate' then
         begin
           if Length(TfArgs) >= 1 then
-            Style.TransformTranslateX := Style.TransformTranslateX + ParseLength(TfArgs[0].Trim, Style.FontSize);
+            AccumTranslateArg(TfArgs[0], Style.FontSize, Style.TransformTranslateX, Style.TransformTranslateXPct);
           if Length(TfArgs) >= 2 then
-            Style.TransformTranslateY := Style.TransformTranslateY + ParseLength(TfArgs[1].Trim, Style.FontSize);
+            AccumTranslateArg(TfArgs[1], Style.FontSize, Style.TransformTranslateY, Style.TransformTranslateYPct);
         end
         else if FnName = 'translatex' then
         begin
           if Length(TfArgs) >= 1 then
-            Style.TransformTranslateX := Style.TransformTranslateX + ParseLength(TfArgs[0].Trim, Style.FontSize);
+            AccumTranslateArg(TfArgs[0], Style.FontSize, Style.TransformTranslateX, Style.TransformTranslateXPct);
         end
         else if FnName = 'translatey' then
         begin
           if Length(TfArgs) >= 1 then
-            Style.TransformTranslateY := Style.TransformTranslateY + ParseLength(TfArgs[0].Trim, Style.FontSize);
+            AccumTranslateArg(TfArgs[0], Style.FontSize, Style.TransformTranslateY, Style.TransformTranslateYPct);
         end
         else if FnName = 'rotate' then
         begin

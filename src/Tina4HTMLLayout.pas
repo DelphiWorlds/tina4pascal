@@ -7066,9 +7066,16 @@ begin
   // from its natural spot). `top:auto` (unset) never sticks.
   if SameText(st.CSSPosition, 'sticky') and (st.CSSTop > -9990) then
     if (Box.Y - OffsetY) < st.CSSTop then OffsetY := Box.Y - st.CSSTop;
-  // transform: translate — shift this box + subtree, unshift after paint
+  // transform: translate — shift this box + subtree, unshift after paint.
+  // A translate arg written as calc() with a % term (e.g. translate(calc(-50% +
+  // 12px))) is parsed to a deferred marker; resolve it here against the box's own
+  // size (X→width, Y→height), matching CSS % semantics for transforms.
   tx := st.TransformTranslateX;
+  if tx <= -99999 then tx := ResolveCalc(tx, Box.W);
+  tx := tx + st.TransformTranslateXPct / 100 * Box.W;   // % → fraction of own width
   ty := st.TransformTranslateY;
+  if ty <= -99999 then ty := ResolveCalc(ty, Box.H);
+  ty := ty + st.TransformTranslateYPct / 100 * Box.H;   // % → fraction of own height
   shifted := (tx <> 0) or (ty <> 0);
   if shifted then ShiftBoxTree(Box, tx, ty);
   try
@@ -7091,6 +7098,7 @@ begin
      (not st.Transform3DSet) and (not st.TransformMatrixSet) and
      (st.TransformRotate = 0) and (st.TransformScaleX = 1) and (st.TransformScaleY = 1) and
      (st.TransformTranslateX = 0) and (st.TransformTranslateY = 0) and
+     (st.TransformTranslateXPct = 0) and (st.TransformTranslateYPct = 0) and
      (st.TransformSkewX = 0) and (st.TransformSkewY = 0) and
      (not SameText(st.CSSPosition, 'fixed')) and (not SameText(st.CSSPosition, 'sticky')) and
      ((y + Box.H <= -PAINT_CULL_MARGIN) or (y >= Tina4PaintViewH + PAINT_CULL_MARGIN)) then
