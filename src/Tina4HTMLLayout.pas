@@ -2450,8 +2450,10 @@ begin
       begin
         hlLang := Tag.GetAttribute('lang', 'pascal');
         showNums := Tag.HasAttribute('line-numbers') or Tag.HasAttribute('linenumbers');
-        // fold view: the visible lines, honouring the collapsed set stored in _folds
-        fv := ComputeFoldView(lines, ParseFolds(Tag.GetAttribute('_folds')), 4);
+        // fold view: visible lines, honouring the collapsed set in _folds and the
+        // language fold rules (Pascal folds whole routines; others fold by indent)
+        fv := ComputeFoldView(lines, ParseFolds(Tag.GetAttribute('_folds')),
+                              FoldRulesForLang(hlLang), 4);
         hasFold := False;
         for vi := 0 to High(fv) do if fv[vi].Foldable then begin hasFold := True; Break; end;
         gutterW := 0;

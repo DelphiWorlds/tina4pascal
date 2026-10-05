@@ -33,8 +33,17 @@ it is a **rendering + gutter-click** feature, not an editing-model change.
    (the visible lines, nesting-aware, self-healing when a stored index is no longer a
    header). Both the renderer (`Tina4HTMLLayout`) and the click handler
    (`Tina4Interact`) fold through this one definition, so they never disagree.
-2. Foldability is **indentation-based** for now; language-aware brackets may layer on
-   later behind the same `TFoldView` without touching callers.
+2. Foldability is chosen per language by **`TFoldRules`** (`FoldRulesForLang`):
+   - **Indentation** is the universal default (PHP, SQL, JSON, Python, a DSL): a
+     line whose following lines are deeper is a header.
+   - **Routine folding** for Pascal: a `procedure`/`function`/`constructor`/
+     `destructor`/`operator` declaration is the header, and its WHOLE body folds
+     into the signature — the range runs through the routine's closing `end;`, so
+     `begin`/`end` are hidden rather than folding on their own (`begin` is a
+     *suppressed* keyword and gets no arrow). Inner indented blocks (an `if` with a
+     deeper body) still fold by indentation. Both shapes produce the same
+     `TFoldView`, so the renderer and click handler are unchanged.
+   More language rule-sets (C/JS `{ }`, etc.) layer on by extending `FoldRulesForLang`.
 3. Collapsed headers are stored on the tag in a **`_folds` attribute** (comma-
    separated source-line indices), parsed/toggled via `ParseFolds`/`ToggleFold` —
    the same DOM-round-trip pattern as `_caret`, so fold state survives every

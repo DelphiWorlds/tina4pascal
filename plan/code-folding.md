@@ -7,7 +7,11 @@ header), and fold state round-trips through the DOM so it survives re-layout.
 ## Scope
 - [x] `src/Tina4CodeFold.pas` — pure fold model (header detection, range end,
       visible view, `_folds` parse/format/toggle). No OS, no canvas (ADR-0001).
-- [x] `tests/test_codefold.pas` — 20 assertions over the model, wired into `test`.
+- [x] Language-aware fold rules (`TFoldRules`/`FoldRulesForLang`): Pascal folds a
+      whole routine into its `procedure`/`function` signature (begin/end hidden, no
+      begin arrow; inner indented blocks still fold); other languages fold by indent.
+- [x] `tests/test_codefold.pas` — 24 assertions (indentation + Pascal routine),
+      wired into `test`.
 - [x] Renderer (`Tina4HTMLLayout.MakeControl`): fold-aware codearea paint — arrows,
       ⋯ marker, hidden lines, source-true line numbers, scroll on visible rows.
 - [x] Fold-arrow hit targets recorded on the box (`TLayoutBox.FoldSpots`).

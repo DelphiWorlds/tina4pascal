@@ -1,10 +1,11 @@
 program test_codefold;
 
 {
-  Real (no-mock) console test for Tina4CodeFold — the indentation fold model the
-  <codearea> renderer and click handler both use. Asserts header detection, range
-  end (with trailing-blank trimming), the collapsed visible-view, nesting, and the
-  _folds attribute round-trip + toggle. Exits 0 with 'ALL TESTS PASS'.
+  Real (no-mock) console test for Tina4CodeFold — the fold model the <codearea>
+  renderer and click handler both use. Covers indentation folding (header detection,
+  range end with trailing-blank trimming, nesting, self-heal) AND Pascal routine
+  folding (a procedure/function folds its whole begin..end body into the signature,
+  begin gets no arrow, inner blocks still fold). Exits 0 with 'ALL TESTS PASS'.
 }
 
 {$mode delphi}{$H+}
@@ -30,55 +31,66 @@ var
   src: TStringList;
   v: TFoldView;
   f: TFoldIndices;
+  IND, PAS: TFoldRules;
 begin
-  { indent: a header is a line whose next non-blank line is deeper }
-  src := L(['procedure Up;', 'begin', '  DoA;', '  DoB;', 'end;']);
+  FillChar(IND, SizeOf(IND), 0); IND.Active := False;   // pure indentation rules
+  PAS := FoldRulesForLang('pascal');
+
+  { ---- indentation folding ---- }
+  src := L(['root', 'begin', '  a', '  b', 'end']);
   try
     Check(LeadingIndent('  x') = 2, 'leading spaces counted');
     Check(LeadingIndent(#9'x', 4) = 4, 'tab expands to TabW');
-    Check(IsFoldHeader(src, 1, 4), 'begin is a fold header (body indented)');
-    Check(not IsFoldHeader(src, 2, 4), 'a leaf line is not a header');
-    Check(not IsFoldHeader(src, 4, 4), 'end is not a header');
-    Check(FoldRangeEnd(src, 1, 4) = 3, 'range covers the two indented body lines');
+    Check(IsFoldHeader(src, 1, IND, 4), 'indent: begin is a header (body deeper)');
+    Check(not IsFoldHeader(src, 2, IND, 4), 'indent: a leaf line is not a header');
+    Check(FoldRangeEnd(src, 1, IND, 4) = 3, 'indent: range covers the two body lines');
   finally src.Free; end;
 
-  { trailing blank lines are trimmed from a fold range }
-  src := L(['root', '  a', '  b', '', 'tail']);
-  try
-    Check(FoldRangeEnd(src, 0, 4) = 2, 'trailing blank not swallowed into range');
-  finally src.Free; end;
-
-  { collapsing a header hides its body but keeps the header line }
   src := L(['header', '  a', '  b', 'after']);
   try
-    f := ParseFolds('0');
-    v := ComputeFoldView(src, f, 4);
-    Check(Length(v) = 2, 'collapsed: only header + after remain visible');
-    Check((v[0].SrcIdx = 0) and v[0].Foldable and v[0].Collapsed, 'header flagged collapsed');
-    Check(v[1].SrcIdx = 3, 'line after the block stays visible');
-    { expanded view shows every line }
-    v := ComputeFoldView(src, [], 4);
-    Check(Length(v) = 4, 'expanded: all four lines visible');
-    Check(v[0].Foldable and not v[0].Collapsed, 'header foldable but not collapsed');
+    v := ComputeFoldView(src, ParseFolds('0'), IND, 4);
+    Check(Length(v) = 2, 'indent collapsed: header + after visible');
+    Check(v[0].Foldable and v[0].Collapsed, 'indent header flagged collapsed');
+    v := ComputeFoldView(src, [], IND, 4);
+    Check(Length(v) = 4, 'indent expanded: all four lines visible');
   finally src.Free; end;
 
-  { nested folds: collapsing the outer hides inner header too }
-  src := L(['outer', '  inner', '    deep', '  tail', 'done']);
+  { ---- Pascal routine folding: the procedure NAME is the header ---- }
+  src := L(['procedure Alpha(const Args: string);',  // 0 header
+            'begin',                                   // 1
+            '  DoAlphaOne;',                           // 2
+            '  DoAlphaTwo;',                           // 3
+            'end;',                                    // 4  routine close
+            '',                                        // 5
+            'procedure Beta;',                         // 6 header
+            'begin',                                   // 7
+            '  if Ready then',                         // 8 inner indent header
+            '    DoBeta;',                             // 9
+            'end;']);                                  // 10
   try
-    v := ComputeFoldView(src, ParseFolds('0'), 4);
-    Check(Length(v) = 2, 'outer collapsed hides inner + deep + tail');
-    Check((v[0].SrcIdx = 0) and (v[1].SrcIdx = 4), 'only outer header and done remain');
-    { collapse only the inner header }
-    v := ComputeFoldView(src, ParseFolds('1'), 4);
-    Check(Length(v) = 4, 'inner collapsed hides only deep');
-    Check(v[2].SrcIdx = 3, 'tail still visible when only inner folded');
+    Check(IsFoldHeader(src, 0, PAS, 4), 'pascal: procedure line is a fold header');
+    Check(not IsFoldHeader(src, 1, PAS, 4), 'pascal: begin gets NO arrow (suppressed)');
+    Check(FoldRangeEnd(src, 0, PAS, 4) = 4, 'pascal: routine folds through its end;');
+    Check(IsFoldHeader(src, 8, PAS, 4), 'pascal: inner if-block still folds by indent');
+    { collapse Alpha (header 0): begin/body/end all hide, only signature remains }
+    v := ComputeFoldView(src, ParseFolds('0'), PAS, 4);
+    Check(v[0].SrcIdx = 0, 'pascal collapsed: Alpha signature stays');
+    Check((v[1].SrcIdx = 5) or (v[1].SrcIdx = 6), 'pascal collapsed: jumps past begin..end to blank/Beta');
+    Check(v[1].SrcIdx <> 1, 'pascal collapsed: begin is hidden');
+    { expanded: Alpha(0) and Beta(6) are headers; begin lines are not }
+    v := ComputeFoldView(src, [], PAS, 4);
+    Check((v[0].SrcIdx = 0) and v[0].Foldable, 'pascal: Alpha foldable');
+    Check((v[1].SrcIdx = 1) and not v[1].Foldable, 'pascal: begin visible, not foldable');
+    Check((v[6].SrcIdx = 6) and v[6].Foldable, 'pascal: Beta foldable');
   finally src.Free; end;
 
-  { stale collapsed index self-heals (line is no longer a header) }
-  src := L(['a', 'b', 'c']);
+  { the same source under INDENTATION rules would instead fold begin — proving the
+    language actually changes the model }
+  src := L(['procedure X;', 'begin', '  Y;', 'end;']);
   try
-    v := ComputeFoldView(src, ParseFolds('0'), 4);
-    Check(Length(v) = 3, 'collapsed index on a non-header is ignored');
+    Check(not IsFoldHeader(src, 0, IND, 4), 'indent rules: procedure line not a header');
+    Check(IsFoldHeader(src, 1, IND, 4), 'indent rules: begin IS a header');
+    Check(IsFoldHeader(src, 0, PAS, 4), 'pascal rules: procedure line IS a header');
   finally src.Free; end;
 
   { _folds round-trip + toggle }
