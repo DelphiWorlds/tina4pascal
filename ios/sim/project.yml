@@ -2,7 +2,7 @@ name: Tina4Sim
 options:
   bundleIdPrefix: com.tina4.pascal
   deploymentTarget:
-    iOS: "14.0"
+    iOS: "15.0"
 targets:
   Tina4Sim:
     type: application
@@ -21,6 +21,7 @@ targets:
       - sdk: CoreFoundation.framework
       - sdk: ImageIO.framework
       - sdk: MobileCoreServices.framework
+      - sdk: CoreLocation.framework
     info:
       path: App/Info.plist
       properties:
@@ -46,3 +47,6 @@ targets:
         # the static lib lives in ios/sim/App/
         LIBRARY_SEARCH_PATHS:
           - $(PROJECT_DIR)/App
+        # FPC thread-variable tables are accepted by the legacy linker but
+        # rejected by Xcode 27's chained-fixup validation.
+        OTHER_LDFLAGS: "-Wl,-no_fixup_chains"

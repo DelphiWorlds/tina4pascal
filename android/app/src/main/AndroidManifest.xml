@@ -4,7 +4,10 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <!-- E4: keep mic capture alive while backgrounded / screen-locked -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
@@ -33,5 +36,13 @@
         <service android:name=".Tina4CaptureService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
+        <service android:name=".Tina4LocationService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+        <provider
+            android:name=".Tina4ShareProvider"
+            android:authorities="com.tina4.pascal.tina4share"
+            android:exported="false"
+            android:grantUriPermissions="true" />
     </application>
 </manifest>

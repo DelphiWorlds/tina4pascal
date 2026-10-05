@@ -9,7 +9,12 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 SRC="$HERE/../src"
 
 export PPC_CONFIG_PATH="${PPC_CONFIG_PATH:-$HOME/fpc/etc}"
-export PATH="$HOME/fpc/bin:$PATH"
+FPC_HOME="${FPC_HOME:-$HOME/fpc}"
+# FPC's Android cross compiler emits GNU-as/ld tool names, while modern NDKs
+# ship LLVM tools. The cross-bin directory contains the small wrappers that
+# translate those names to the installed NDK (see docs/TOOLCHAIN.md).
+FPC_CROSS_BIN="${FPC_CROSS_BIN:-$FPC_HOME/cross/bin/aarch64-android}"
+export PATH="$FPC_CROSS_BIN:$FPC_HOME/bin:$PATH"
 
 # ABI  →  FPC flags  (arm64 = every modern phone; armv7 = 32-bit devices)
 abi_flags() {

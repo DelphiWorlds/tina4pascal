@@ -17,6 +17,8 @@ uses
   ctypes, Math,
   CGContext, CGImage, CGColorSpace, CGDataProvider, CGGeometry,
   Tina4RenderBackend, Tina4ShellIOS, Tina4Interact, Tina4Canvas2D, Tina4Http, Tina4HttpIOS,
+  Tina4ShareItems, Tina4ShareItemsIOS, Tina4Capabilities,
+  Tina4Location, Tina4LocationIOS,
   ThreePascal, RamModel
   { A project's own units (declared as "appUnits" in tina4.json) are spliced in
     here by the iOS build. Each registers its named actions in its own
@@ -32,7 +34,22 @@ var
 procedure tina4_ios_notify(Title, Body, Tag: PAnsiChar); cdecl;
   external name 'tina4_ios_notify';
 procedure tina4_ios_notify_authorize; cdecl;
-  external name 'tina4_ios_notify_authorize';
+    external name 'tina4_ios_notify_authorize';
+
+procedure tina4_share_result(Status: cint; Activity, Error: PAnsiChar); cdecl;
+  public name '_tina4_share_result';
+begin
+  Tina4ShareComplete(TTina4CapabilityStatus(Status), string(AnsiString(Activity)),
+    string(AnsiString(Error)));
+end;
+
+procedure tina4_location_result(Status: cint; Latitude, Longitude, Accuracy,
+  Altitude, Speed, Timestamp: Double; Error: PAnsiChar); cdecl;
+  public name '_tina4_location_result';
+begin
+  Tina4LocationDeliver(TTina4CapabilityStatus(Status), Latitude, Longitude,
+    Accuracy, Altitude, Speed, Timestamp, string(AnsiString(Error)));
+end;
 
 // Registered as the engine's notify handler — notify.show('T','B') in HTML, or an
 // SSE/WebSocket handler calling Tina4Notify, lands here and posts an OS banner

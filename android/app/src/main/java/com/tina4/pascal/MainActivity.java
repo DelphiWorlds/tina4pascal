@@ -38,6 +38,8 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        Tina4Share.init(this);
+        Tina4Location.init(this);
         // local notifications: hold the app context + channel; ask permission on 33+
         Tina4Notify.init(this);
         if (Build.VERSION.SDK_INT >= 33 &&
@@ -54,6 +56,8 @@ public class MainActivity extends Activity {
                 View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
         }
         view = new Tina4View(this);
+        Tina4Location.setView(view);
+        Tina4Share.setView(view);
         // Host the engine view in a FrameLayout so native <video> players can be
         // overlaid as sibling views positioned over their poster boxes.
         FrameLayout root = new FrameLayout(this);
@@ -195,6 +199,10 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == Tina4Share.REQUEST_CODE) {
+            if (view != null) view.onShareResult(resultCode == RESULT_OK ? 0 : 6, "", "");
+            return;
+        }
         if (view == null || resultCode != RESULT_OK) return;
         if (requestCode == REQ_PICK_FILE && data != null && data.getData() != null) {
             view.onFilePicked(displayName(data.getData()));
@@ -226,6 +234,11 @@ public class MainActivity extends Activity {
                 beginRecording();
             else if (view != null)
                 view.onRecordingDone("");   // denied → roll back to idle
+        }
+        if (requestCode == Tina4Location.REQUEST_CODE) {
+            boolean allowed = grantResults.length > 0 &&
+                grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED;
+            Tina4Location.permissionResult(allowed);
         }
     }
 

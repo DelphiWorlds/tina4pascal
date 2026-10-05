@@ -656,6 +656,12 @@ proj_android_build() {
   mkdir -p "$host"; cp -R "$ROOT/android/." "$host/"
   APPDIR="$host/app/src/main"
   rm -rf "$host/out" "$host"/*.apk "$host"/*.idsig "$APPDIR/jniLibs" 2>/dev/null || true
+  # Each packaged project owns its share provider authority. The reference host
+  # keeps the default value; project APKs must not collide with one another or
+  # with the reference app already installed on a test device.
+  sed -i.bak "s/com\.tina4\.pascal\.tina4share/${bundle}.tina4share/g" \
+    "$APPDIR/AndroidManifest.xml"
+  rm -f "$APPDIR/AndroidManifest.xml.bak"
   mkdir -p "$APPDIR/assets"; cp "$work/index.html" "$APPDIR/assets/showcase.html"
   # bundle the project's assets (icon, images) into the APK; local-asset <img>
   # resolution on Android is a follow-up (see docs/TOOLING-DISTRIBUTION.md).
@@ -1288,7 +1294,7 @@ cmd_test() {
   need_fpc
   fail=0
   clean_src_units   # never let a stray src/*.ppu shadow an engine edit
-  for t in dom highlight codearea flexrebuild includes qr svg picture services http docs frond pseudo media webp pdf scanner barcode crypto auth rbacui authflow secrets ssoflow; do
+  for t in dom highlight codearea flexrebuild includes qr svg picture services http docs frond pseudo media webp pdf scanner barcode crypto auth rbacui authflow secrets ssoflow share_items location; do
     [ -f "$ROOT/tests/test_$t.pas" ] || continue
     o="$BUILD/test/$t"; mkdir -p "$o"
     "$FPC" -Mdelphi -Fu"$SRC" -FE"$o" -FU"$o" "$ROOT/tests/test_$t.pas" >/dev/null 2>&1 \
@@ -1339,6 +1345,7 @@ cmd_macos() {
   <key>LSMinimumSystemVersion</key><string>10.13</string>
   <key>NSMicrophoneUsageDescription</key><string>Record audio from a &lt;recorder&gt; element.</string>
   <key>NSCameraUsageDescription</key><string>Capture photos and scan codes from &lt;camera&gt; / scanner elements.</string>
+  <key>NSLocationWhenInUseUsageDescription</key><string>Use your location while the app is in the foreground.</string>
 </dict></plist>
 PLIST
   ok "built ${B}$app${Z}"
@@ -1589,7 +1596,9 @@ proj_ios_deploy() {
     -destination 'generic/platform=iOS' DEVELOPMENT_TEAM="$iteam" \
     -allowProvisioningUpdates -derivedDataPath "$iwork/dd" build 2>&1 \
     | grep -qE "BUILD SUCCEEDED" || die "build/sign failed (set your team in App Store Connect)"
-  app="$(find "$iwork/dd/Build/Products" -maxdepth 2 -name '*.app' -path '*iphoneos*' | head -1)"
+  # `xcodebuild build` defaults to Debug; do not accidentally pick up a stale
+  # unsigned Release app left by the separate link-check build.
+  app="$(find "$iwork/dd/Build/Products" -maxdepth 2 -name '*.app' -path '*Debug-iphoneos*' | head -1)"
   say "→ installing on ${udid}..."
   xcrun devicectl device install app --device "$udid" "$app" >/dev/null 2>&1 \
     || die "install failed (iPhone unlocked?)"
@@ -1686,7 +1695,7 @@ cmd_deploy() {
 ios_udid() {
   [ -n "${IOS_UDID:-}" ] && { echo "$IOS_UDID"; return; }
   id="$(xcrun devicectl list devices 2>/dev/null \
-        | grep -iE 'available' | grep -iE 'iphone|ipad' \
+        | grep -iE 'available|connected' | grep -iE 'iphone|ipad' \
         | grep -oE '[0-9A-Fa-f]{8}-([0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}' | head -1)"
   [ -n "$id" ] && { echo "$id"; return; }
   idevice_id -l 2>/dev/null | head -1

@@ -67,12 +67,26 @@
         // the engine paints the safe area; the status-bar / home-indicator strips
         // outside it show this colour — match the page background (--paper)
         self.backgroundColor = [UIColor colorWithRed:0.984 green:0.980 blue:0.969 alpha:1.0];
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(tina4LocationReady:)
+                                                     name:@"Tina4LocationReady"
+                                                   object:nil];
         // ThreePascal demo: drive the walking ram continuously (the scene renders
         // in pure software into the drawRect context, so we just need a steady
         // vsync-paced setNeedsDisplay).
         // (sheep demo display-link disabled — rendering the HTML shadow test instead)
     }
     return self;
+}
+
+- (void)tina4LocationReady:(NSNotification *)note {
+    [self setNeedsDisplay];
+}
+
+- (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self
+                                                      name:@"Tina4LocationReady"
+                                                    object:nil];
 }
 
 - (void)sheepTick { [self setNeedsDisplay]; }

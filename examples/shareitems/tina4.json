@@ -1,0 +1,7 @@
+{
+  "name": "ShareItems Demo",
+  "title": "Tina4 ShareItems Demo",
+  "bundleId": "com.delphiworlds.shareitemsdemo",
+  "main": "main.pas",
+  "appUnits": ["ShareItemsDemo"]
+}

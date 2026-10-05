@@ -15,7 +15,11 @@ uses
   SysUtils, Math,
   jni,
   Tina4RenderBackend, Tina4ShellAndroid, Tina4Interact,
-  Tina4Http, Tina4HttpAndroid, Tina4NotifyAndroid,
+  Tina4Http, Tina4HttpAndroid, Tina4NotifyAndroid, Tina4ShareItems,
+  Tina4Capabilities,
+  Tina4Location,
+  Tina4LocationAndroid,
+  Tina4ShareItemsAndroid,
   ThreePascal, RamModel
   { A project's own units (declared as "appUnits" in tina4.json) are spliced in
     here by the android build. Each registers its named actions in its own
@@ -44,7 +48,17 @@ function JNI_OnLoad(VM: PJavaVM; Reserved: Pointer): jint; cdecl;
 begin
   InstallAndroidHttp(VM);
   InstallAndroidNotify(VM);       // notify.show → Java Tina4Notify → NotificationManager
+  InstallAndroidShareItems(VM);   // share items → Java chooser + content provider
+  InstallAndroidLocation(VM);     // platform LocationManager adapter
   Result := JNI_VERSION_1_6;
+end;
+
+procedure Java_com_tina4_pascal_Tina4Location_nativeLocationResult(
+  Env: PJNIEnv; This: jobject; Status: jint; Latitude, Longitude, Accuracy,
+  Altitude, Speed, Timestamp: jdouble; Error: jstring); cdecl;
+begin
+  Tina4LocationDeliver(TTina4CapabilityStatus(Status), Latitude, Longitude,
+    Accuracy, Altitude, Speed, Timestamp, JToStr(Env, Error));
 end;
 
 { Java Http worker → native: hand a completed response to the pump queue }
@@ -230,6 +244,12 @@ begin
   TinaSetRecording(JToStr(Env, Path));   // '' rolls a failed capture back to idle
 end;
 
+procedure Java_com_tina4_pascal_Tina4View_nativeShareResult(Env: PJNIEnv; This: jobject;
+  Status: jint; Activity, Error: jstring); cdecl;
+begin
+  Tina4ShareComplete(TTina4CapabilityStatus(Status), JToStr(Env, Activity), JToStr(Env, Error));
+end;
+
 { engine-drawn <audio controls>: the Java side plays/pauses a MediaPlayer and
   pushes progress back — the engine draws the play/pause bar. }
 function Java_com_tina4_pascal_Tina4View_nativeAudioSrc(Env: PJNIEnv; This: jobject): jstring; cdecl;
@@ -330,6 +350,7 @@ exports
   Java_com_tina4_pascal_Tina4View_nativeSetFile,
   Java_com_tina4_pascal_Tina4View_nativeSetPhoto,
   Java_com_tina4_pascal_Tina4View_nativeSetRecording,
+  Java_com_tina4_pascal_Tina4View_nativeShareResult,
   Java_com_tina4_pascal_Tina4View_nativeAudioSrc,
   Java_com_tina4_pascal_Tina4View_nativeAudioWantPlay,
   Java_com_tina4_pascal_Tina4View_nativeSetAudioProgress,
@@ -341,6 +362,7 @@ exports
   Java_com_tina4_pascal_Tina4View_nativeEmbedFormats,
   Java_com_tina4_pascal_Tina4View_nativeScanResult,
   Java_com_tina4_pascal_Tina4View_nativeSetAudioLevel,
+  Java_com_tina4_pascal_Tina4Location_nativeLocationResult,
   Java_com_tina4_pascal_Http_nativeHttpResult,
   Java_com_tina4_pascal_ImageLoader_nativeImageReady,
   JNI_OnLoad;

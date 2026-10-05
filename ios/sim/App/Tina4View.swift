@@ -10,6 +10,7 @@ import SwiftUI
 final class Tina4View: UIView {
     private var started = false
     private var timer: Timer?
+    private var redrawTimer: Timer?
     private var imgObserver: NSObjectProtocol?     // retain the block observer, else it's torn down
     private var accentPink = false
 
@@ -23,7 +24,9 @@ final class Tina4View: UIView {
     // Load the bundled showcase page (rich, self-contained HTML) if present;
     // otherwise fall back to the generated live clock.
     private lazy var bundledHTML: String? =
-        Bundle.main.url(forResource: "demo", withExtension: "html")
+        (Bundle.main.url(forResource: "shareitems", withExtension: "html") ??
+         Bundle.main.url(forResource: "location", withExtension: "html") ??
+         Bundle.main.url(forResource: "demo", withExtension: "html"))
             .flatMap { try? String(contentsOf: $0, encoding: .utf8) }
 
     func startIfNeeded() {
@@ -46,6 +49,13 @@ final class Tina4View: UIView {
         if bundledHTML == nil {
             timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
                 self?.loadHTML(); self?.setNeedsDisplay()
+            }
+        } else {
+            // Native callbacks such as Core Location update the engine DOM
+            // asynchronously. Repaint the simulator host so those changes
+            // become visible without requiring another tap.
+            redrawTimer = Timer.scheduledTimer(withTimeInterval: 0.10, repeats: true) { [weak self] _ in
+                self?.setNeedsDisplay()
             }
         }
     }
@@ -70,7 +80,11 @@ final class Tina4View: UIView {
         _ = tina4sim_native_touch(0, Float(p.x), Float(p.y))
         _ = tina4sim_native_touch(1, Float(p.x), Float(p.y))
         accentPink.toggle()
-        loadHTML(); setNeedsDisplay()
+        // Actions can update the live DOM (for example the Location demo's
+        // status text). Reloading the source HTML here would discard those
+        // changes immediately after the tap. The native frame renderer reads
+        // the updated DOM on the next draw instead.
+        setNeedsDisplay()
     }
 
     private func loadHTML() {

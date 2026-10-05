@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Tina4 ShareItems</title>
+  <style>
+    body { font-family: sans-serif; margin: 0; padding: 22px; color: #17202a; }
+    h1 { margin: 0 0 6px; font-size: 25px; }
+    p { color: #566573; line-height: 1.4; }
+    button { display: block; width: 100%; margin: 10px 0; padding: 13px 14px;
+      border: 0; border-radius: 8px; background: #2874a6; color: white; font-size: 16px; }
+    button.secondary { background: #7f8c8d; }
+    #status { padding: 12px; border-radius: 8px; background: #f2f4f4; min-height: 42px; }
+    code { word-break: break-all; }
+  </style>
+</head>
+<body>
+  <h1>ShareItems demo</h1>
+  <p>These actions exercise the shared Tina4 capability contract and the native share chooser.</p>
+  <button onclick="share.text()">Share text</button>
+  <button onclick="share.file()">Share generated text file</button>
+  <button onclick="share.image()">Share generated image</button>
+  <button onclick="share.mixed()">Share text + file + image</button>
+  <button class="secondary" onclick="share.clear()">Clear item list</button>
+  <h2>Status</h2>
+  <div id="status">Ready. Items are created when an action is tapped.</div>
+</body>
+</html>

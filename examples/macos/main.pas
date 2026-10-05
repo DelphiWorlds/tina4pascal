@@ -14,7 +14,7 @@ program main;
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
   SysUtils, Classes,
-  Tina4RenderBackend, Tina4ShellCocoa, Tina4Interact;
+  Tina4RenderBackend, Tina4ShellCocoa, Tina4Interact, Tina4LocationMacOS;
 
 type
   TMacApp = class
