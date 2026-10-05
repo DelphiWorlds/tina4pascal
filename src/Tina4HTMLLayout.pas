@@ -13,7 +13,8 @@ interface
 uses
   SysUtils, Classes, Math, Generics.Collections,
   Tina4HTMLDom, Tina4RenderBackend, Tina4Theme, Tina4QR, Tina4SVG, Tina4Canvas2D,
-  Tina4Lottie, Tina4RasterCanvas, Tina4Elements, Tina4Hyphen, Tina4Highlight;
+  Tina4Lottie, Tina4RasterCanvas, Tina4Elements, Tina4Hyphen, Tina4Highlight,
+  Tina4CodeFold;
 
 type
   TTextRun = record
@@ -41,6 +42,13 @@ type
     ckSelect, ckButton, ckFile, ckDate, ckRange, ckColor, ckProgress, ckMeter,
     ckAudio);
 
+  { A <codearea> fold-arrow click target, in box-LOCAL coords (add Box.X/Y to hit
+    test). Header is the 0-based source line the arrow toggles. }
+  TFoldSpot = record
+    Top, Bot, Left, Right: Single;
+    Header: Integer;
+  end;
+
   TLayoutBox = class
   public
     Tag: THTMLTag;                 // may be nil for anonymous boxes
@@ -55,6 +63,7 @@ type
     IsSVG: Boolean;                // <svg> replaced element
     SVGRoot: THTMLTag;             // the <svg> node, painted vector at paint time
     ControlKind: TControlKind;
+    FoldSpots: array of TFoldSpot; // <codearea> fold-arrow hit targets (box-local)
     Scrollable: Boolean;           // overflow-y auto/scroll with an explicit height
     ScrollTop: Single;
     MaxScroll: Single;
@@ -2246,10 +2255,12 @@ var
   lines: TStringList;
   opt: THTMLTag;
   seg: string;
-  isCode, showNums: Boolean;
-  gutterW, cx: Single;
+  isCode, showNums, hasFold: Boolean;
+  gutterW, foldW, cx: Single;
   hlLang: string;
   tk: THLToken;
+  fv: TFoldView;
+  firstVis, vi, srcIdx: Integer;
 begin
   kind := ControlKindOf(Tag);
   Result := TLayoutBox.Create;
@@ -2416,51 +2427,90 @@ begin
       // lines so the caret line stays visible while typing.
       firstLine := 0;
       if lines.Count > rows then firstLine := lines.Count - rows;
-      // <codearea>: syntax-highlight each line (lang="…") and optionally show a
-      // line-number gutter (attribute line-numbers / linenumbers). Everything else
-      // is a plain <textarea>: one flat-coloured run per line.
+      // <codearea>: syntax-highlight each line (lang="…"), an optional line-number
+      // gutter (line-numbers / linenumbers), and indentation code folding — a ▾/▸
+      // arrow beside each foldable line, collapsed ranges hidden with a ⋯ marker.
+      // A plain <textarea> is just one flat-coloured run per line.
       isCode := SameText(Tag.TagName, 'codearea');
-      gutterW := 0;
-      if isCode then
+      if not isCode then
+      begin
+        for i := firstLine to lines.Count - 1 do
+        begin
+          run.X := St.BorderWidths.Left + St.Padding.Left;
+          run.Y := St.BorderWidths.Top + St.Padding.Top + (i - firstLine) * lineH;
+          run.FontSize := St.FontSize; run.Styles := FontStylesOf(St);
+          run.Color := St.Color; run.LetterSpacing := 0;
+          run.FontWeight := St.FontWeight; run.ShadowColor := 0; run.ShadowDX := 0; run.ShadowDY := 0;
+          ComputeDecor(St, run.Styles, run.DecorLines, run.DecorStyle, run.DecorColor, run.DecorThickness, run.DecorOffset);
+          run.Text := lines[i];
+          Result.Runs.Add(run);
+        end;
+      end
+      else
       begin
         hlLang := Tag.GetAttribute('lang', 'pascal');
         showNums := Tag.HasAttribute('line-numbers') or Tag.HasAttribute('linenumbers');
+        // fold view: the visible lines, honouring the collapsed set stored in _folds
+        fv := ComputeFoldView(lines, ParseFolds(Tag.GetAttribute('_folds')), 4);
+        hasFold := False;
+        for vi := 0 to High(fv) do if fv[vi].Foldable then begin hasFold := True; Break; end;
+        gutterW := 0;
         if showNums then
           gutterW := FCanvas.MeasureText(IntToStr(lines.Count) + ' ',
                        St.FontSize, FontStylesOf(St)).Width + 10;
-      end;
-      for i := firstLine to lines.Count - 1 do
-      begin
-        run.X := St.BorderWidths.Left + St.Padding.Left;
-        run.Y := St.BorderWidths.Top + St.Padding.Top + (i - firstLine) * lineH;
-        run.FontSize := St.FontSize;
-        run.Styles := FontStylesOf(St);
-        run.Color := St.Color; run.LetterSpacing := 0;
-        run.FontWeight := St.FontWeight; run.ShadowColor := 0; run.ShadowDX := 0; run.ShadowDY := 0;
-        ComputeDecor(St, run.Styles, run.DecorLines, run.DecorStyle, run.DecorColor, run.DecorThickness, run.DecorOffset);
-        if not isCode then
+        foldW := 0;   // a fixed arrow column, only when something can fold
+        if hasFold then foldW := FCanvas.MeasureText('▾ ', St.FontSize, FontStylesOf(St)).Width;
+        // auto-scroll on VISIBLE rows so the caret line stays in view while typing
+        firstVis := 0;
+        if Length(fv) > rows then firstVis := Length(fv) - rows;
+        for vi := firstVis to High(fv) do
         begin
-          run.Text := lines[i];
-          Result.Runs.Add(run);
-          Continue;
-        end;
-        // line-number gutter (muted, right-padded)
-        if showNums then
-        begin
-          run.Text := IntToStr(i + 1);
-          run.Color := $FF6E7681;
-          Result.Runs.Add(run);
-        end;
-        // coloured token runs, advancing X across the line
-        cx := run.X + gutterW;
-        for tk in HighlightTokens(lines[i], hlLang) do
-        begin
-          if tk.Kind = hlDefault then run.Color := St.Color
-          else run.Color := DefaultColor(tk.Kind);
-          run.Text := tk.Text;
-          run.X := cx;
-          Result.Runs.Add(run);
-          cx := cx + FCanvas.MeasureText(tk.Text, St.FontSize, run.Styles).Width;
+          srcIdx := fv[vi].SrcIdx;
+          run.X := St.BorderWidths.Left + St.Padding.Left;
+          run.Y := St.BorderWidths.Top + St.Padding.Top + (vi - firstVis) * lineH;
+          run.FontSize := St.FontSize; run.Styles := FontStylesOf(St);
+          run.Color := St.Color; run.LetterSpacing := 0;
+          run.FontWeight := St.FontWeight; run.ShadowColor := 0; run.ShadowDX := 0; run.ShadowDY := 0;
+          ComputeDecor(St, run.Styles, run.DecorLines, run.DecorStyle, run.DecorColor, run.DecorThickness, run.DecorOffset);
+          // line number gutter (muted) — the REAL source line, so numbers skip folds
+          if showNums then
+          begin
+            run.Text := IntToStr(srcIdx + 1);
+            run.Color := $FF6E7681;
+            Result.Runs.Add(run);
+          end;
+          // fold arrow in its own column, just before the code — and a box-local
+          // click target so a tap on the arrow toggles this header's fold
+          if fv[vi].Foldable then
+          begin
+            if fv[vi].Collapsed then run.Text := '▸' else run.Text := '▾';
+            run.Color := $FF8A919C;
+            run.X := St.BorderWidths.Left + St.Padding.Left + gutterW;
+            Result.Runs.Add(run);
+            SetLength(Result.FoldSpots, Length(Result.FoldSpots) + 1);
+            with Result.FoldSpots[High(Result.FoldSpots)] do
+            begin
+              Top := run.Y; Bot := run.Y + lineH;
+              Left := run.X; Right := run.X + foldW; Header := srcIdx;
+            end;
+          end;
+          // coloured token runs, advancing X across the line
+          cx := St.BorderWidths.Left + St.Padding.Left + gutterW + foldW;
+          for tk in HighlightTokens(lines[srcIdx], hlLang) do
+          begin
+            if tk.Kind = hlDefault then run.Color := St.Color
+            else run.Color := DefaultColor(tk.Kind);
+            run.Text := tk.Text;
+            run.X := cx;
+            Result.Runs.Add(run);
+            cx := cx + FCanvas.MeasureText(tk.Text, St.FontSize, run.Styles).Width;
+          end;
+          // a collapsed header trails a dim ⋯ so the hidden block is discoverable
+          if fv[vi].Collapsed then
+          begin
+            run.Text := ' ⋯'; run.Color := $FF8A919C; run.X := cx;
+            Result.Runs.Add(run);
+          end;
         end;
       end;
     finally

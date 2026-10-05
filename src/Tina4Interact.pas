@@ -238,7 +238,7 @@ implementation
 uses
   SysUtils, Classes, Math, DateUtils, Generics.Collections, fpjson, jsonparser,
   Tina4HTMLDom, Tina4HTMLLayout, Tina4Elements, Tina4Events, Tina4Frond, Tina4Http, Tina4Services,
-  Tina4Canvas2D, Tina4Builtins, Tina4Pages;
+  Tina4Canvas2D, Tina4Builtins, Tina4Pages, Tina4CodeFold;
 
 type
   TEmbedRec = record
@@ -1998,6 +1998,29 @@ begin
   else Result := 0;
 end;
 
+{ A tap on a <codearea> fold arrow (doc coords) toggles that block's _folds and
+  relayouts — returns True when it consumed the tap, so the editor is not focused.
+  Both sides fold through Tina4CodeFold; the renderer left the arrow hit rects on
+  the box (box-local), so this just offsets by the box origin. }
+function TryToggleFold(Ctrl: THTMLTag; docX, docY: Single): Boolean;
+var b: TLayoutBox; i: Integer; lx, ly: Single;
+begin
+  Result := False;
+  if not SameText(Ctrl.TagName, 'codearea') then Exit;
+  b := FindBoxForTag(GRoot, Ctrl);
+  if (b = nil) or (Length(b.FoldSpots) = 0) then Exit;
+  lx := docX - b.X; ly := docY - b.Y;
+  for i := 0 to High(b.FoldSpots) do
+    with b.FoldSpots[i] do
+      if (lx >= Left) and (lx <= Right) and (ly >= Top) and (ly <= Bot) then
+      begin
+        SetAttr(Ctrl, '_folds',
+          FoldsToStr(ToggleFold(ParseFolds(Ctrl.GetAttribute('_folds')), Header)));
+        GLayoutDirty := True;
+        Exit(True);
+      end;
+end;
+
 { A tap landed on Ctrl (already the control ancestor). Mutate the DOM and
   return the TINA_* keyboard/action signal. }
 function HandleControlTap(Ctrl: THTMLTag): Integer;
@@ -2310,6 +2333,8 @@ begin
            if GFocusedTag <> nil then begin BlurAll; GLayoutDirty := True; Result := TINA_HIDE_KBD; end;
            Exit;
          end;
+         // a tap on a <codearea> fold arrow toggles the block, not focus the editor
+         if TryToggleFold(ctrl, cx, cy + GScrollY) then Exit;
          if CtrlKind(ctrl) <> ckNone then
            Result := HandleControlTap(ctrl)
          else if ctrl.HasAttribute('onclick') then
