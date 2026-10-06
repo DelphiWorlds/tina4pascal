@@ -25,6 +25,6 @@ including closed icon contours such as gears and settings symbols.
 - [x] `Z`/`z` reset the current point but discarded the closing edge before the stroke painter received the contour.
 
 ## Commits
-- Pending
+- `085680d` — `fix(svg): preserve closed stroked path edges` (PR #27)
 
-## Status: In progress
+## Status: In progress — PR #27 open; Android emulator visual verification pending.
