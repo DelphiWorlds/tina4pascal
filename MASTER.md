@@ -57,6 +57,7 @@ gets an **ADR**. Conventions and templates: [`plan/README.md`](plan/README.md).
 - [ADR-0010](plan/adr/0010-code-folding.md) — `<codearea>` code folding by indentation
 - [ADR-0011](plan/adr/0011-transform-percent-resolution.md) — `translate()` `%` resolves against the element's own box
 - [ADR-0012](plan/adr/0012-onmousemove-event.md) — `onmousemove` DOM event dispatched to app code
+- [ADR-0013](plan/adr/0013-ios-safe-area-css-values.md) — native safe-area insets flow through CSS environment values
 
 ### Task plans — `plan/`
 - [code-editing-highlighting](plan/code-editing-highlighting.md) — `<codearea>` + Tina4Highlight
@@ -67,6 +68,8 @@ gets an **ADR**. Conventions and templates: [`plan/README.md`](plan/README.md).
 - [mobile-scroll-render-optimizations](plan/mobile-scroll-render-optimizations.md)
 - [svg-close-path-strokes](plan/svg-close-path-strokes.md) — preserve the closing edge in stroked SVG paths
 - [readme-mobile-emulators](plan/readme-mobile-emulators.md)
+- [fixed-hit-testing-after-scroll](plan/fixed-hit-testing-after-scroll.md) — restore fixed-control taps after document scrolling
+- [ios-safe-area-env-and-footer](plan/ios-safe-area-env-and-footer.md) — expose iOS insets for safe fixed footers
 
 ## Skills
 
